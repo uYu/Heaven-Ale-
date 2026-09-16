@@ -1,0 +1,33 @@
+seed=3000 seat=0 scores=20/12/14/49 steps=352
+seed=3000 seat=1 scores=14/12/12/43 steps=321
+seed=3000 seat=2 scores=8/23/26/18 steps=313
+seed=3000 seat=3 scores=14/34/12/35 steps=368
+seed=3001 seat=0 scores=24/23/6/12 steps=365
+seed=3001 seat=1 scores=8/41/9/8 steps=340
+seed=3001 seat=2 scores=16/31/21/4 steps=331
+seed=3001 seat=3 scores=18/6/22/27 steps=339
+seed=3002 seat=0 scores=43/8/8/24 steps=351
+seed=3002 seat=1 scores=7/19/16/4 steps=322
+seed=3002 seat=2 scores=11/28/30/5 steps=324
+seed=3002 seat=3 scores=0/23/12/30 steps=344
+{
+  "contender": "hard",
+  "opponent": "normal",
+  "start": 3000,
+  "seeds": 3,
+  "games": 12,
+  "fractionalWinRate": 0.75,
+  "approximate95Interval": [
+    0.4670983680970834,
+    1
+  ],
+  "meanScore": 27.333333333333332,
+  "opponentsMeanScore": 15.611111111111109,
+  "meanMarginAgainstBest": 0.25,
+  "decisionMs": {
+    "median": 396.38054199999897,
+    "p95": 836.7216250000056,
+    "max": 1238.8613750000004
+  },
+  "legalActions": 4070
+}

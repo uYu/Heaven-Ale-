@@ -1,0 +1,29 @@
+seed=9000 seat=0 scores=29/20/13/23 steps=334
+seed=9000 seat=1 scores=13/19/2/18 steps=316
+seed=9000 seat=2 scores=41/16/17/23 steps=335
+seed=9000 seat=3 scores=27/18/5/26 steps=361
+seed=9001 seat=0 scores=18/9/15/6 steps=348
+seed=9001 seat=1 scores=14/28/16/17 steps=352
+seed=9001 seat=2 scores=29/20/36/2 steps=376
+seed=9001 seat=3 scores=21/22/9/13 steps=347
+{
+  "contender": "hard",
+  "opponent": "hard-v1",
+  "filler": "normal",
+  "duelWinRate": 0.75,
+  "duelMeanMargin": 1.625,
+  "start": 9000,
+  "seeds": 2,
+  "games": 8,
+  "fractionalWinRate": 0.625,
+  "approximate95Interval": null,
+  "meanScore": 23.25,
+  "opponentsMeanScore": 16.625,
+  "meanMarginAgainstBest": -0.75,
+  "decisionMs": {
+    "median": 90.09983299998567,
+    "p95": 1115.6656659999862,
+    "max": 3542.3341670000227
+  },
+  "legalActions": 2769
+}

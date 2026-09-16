@@ -1,0 +1,28 @@
+seed=10000 seat=0 scores=78/0/13/8 steps=365
+seed=10000 seat=1 scores=19/28/6/36 steps=330
+seed=10000 seat=2 scores=10/9/37/17 steps=348
+seed=10000 seat=3 scores=16/22/18/33 steps=340
+seed=10001 seat=0 scores=58/27/5/16 steps=383
+seed=10001 seat=1 scores=8/16/11/29 steps=319
+seed=10001 seat=2 scores=16/12/68/21 steps=360
+seed=10001 seat=3 scores=14/10/17/38 steps=336
+{
+  "contender": "hard",
+  "opponent": "normal",
+  "duelWinRate": 0.75,
+  "duelMeanMargin": 26.875,
+  "start": 10000,
+  "seeds": 2,
+  "games": 8,
+  "fractionalWinRate": 0.75,
+  "approximate95Interval": null,
+  "meanScore": 44.5,
+  "opponentsMeanScore": 15,
+  "meanMarginAgainstBest": 21.75,
+  "decisionMs": {
+    "median": 111.07333299997845,
+    "p95": 1366.909249999997,
+    "max": 4102.547040999998
+  },
+  "legalActions": 2781
+}

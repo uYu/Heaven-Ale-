@@ -1,0 +1,14 @@
+node_modules/
+dist/
+tmp/
+*.tsbuildinfo
+.DS_Store
+
+# Local settings, secrets and diagnostic output
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+.idea/
+.vscode/

@@ -1,0 +1,29 @@
+seed=1030 seat=0 scores=51/8/25/0 steps=354
+seed=1030 seat=1 scores=7/48/12/6 steps=343
+seed=1030 seat=2 scores=12/21/18/22 steps=352
+seed=1030 seat=3 scores=2/15/23/37 steps=336
+seed=1031 seat=0 scores=47/21/15/16 steps=378
+seed=1031 seat=1 scores=10/30/21/12 steps=362
+seed=1031 seat=2 scores=19/16/34/6 steps=348
+seed=1031 seat=3 scores=8/10/0/46 steps=340
+{
+  "contender": "hard",
+  "opponent": "baseline",
+  "start": 1030,
+  "seeds": 2,
+  "games": 8,
+  "fractionalWinRate": 0.875,
+  "approximate95Interval": [
+    0.63,
+    1
+  ],
+  "meanScore": 38.875,
+  "opponentsMeanScore": 12.791666666666668,
+  "meanMarginAgainstBest": 19.75,
+  "decisionMs": {
+    "median": 392.9035000000149,
+    "p95": 831.7971660000039,
+    "max": 1248.5844999999972
+  },
+  "legalActions": 2813
+}

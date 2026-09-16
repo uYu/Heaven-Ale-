@@ -1,0 +1,37 @@
+seed=2000 seat=0 scores=12/36/5/4 steps=336
+seed=2000 seat=1 scores=12/35/0/29 steps=327
+seed=2000 seat=2 scores=13/24/6/25 steps=336
+seed=2000 seat=3 scores=15/22/0/24 steps=312
+seed=2001 seat=0 scores=32/12/6/14 steps=339
+seed=2001 seat=1 scores=9/10/21/36 steps=368
+seed=2001 seat=2 scores=24/2/14/31 steps=346
+seed=2001 seat=3 scores=20/7/15/15 steps=333
+seed=2002 seat=0 scores=40/19/2/18 steps=338
+seed=2002 seat=1 scores=10/25/21/8 steps=328
+seed=2002 seat=2 scores=6/14/13/7 steps=319
+seed=2002 seat=3 scores=25/25/4/12 steps=330
+seed=2003 seat=0 scores=25/15/27/14 steps=335
+seed=2003 seat=1 scores=10/38/32/2 steps=357
+seed=2003 seat=2 scores=28/18/37/8 steps=335
+seed=2003 seat=3 scores=14/15/33/14 steps=365
+{
+  "contender": "normal",
+  "opponent": "baseline",
+  "start": 2000,
+  "seeds": 4,
+  "games": 16,
+  "fractionalWinRate": 0.4375,
+  "approximate95Interval": [
+    0.315,
+    0.56
+  ],
+  "meanScore": 22,
+  "opponentsMeanScore": 15.77083333333333,
+  "meanMarginAgainstBest": -3.75,
+  "decisionMs": {
+    "median": 0.03362499999991542,
+    "p95": 0.8896250000000236,
+    "max": 3.6897500000000036
+  },
+  "legalActions": 5404
+}
