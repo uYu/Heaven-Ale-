@@ -1,0 +1,39 @@
+seed=15000 seat=0 scores=38/7/26/10 steps=383
+seed=15000 seat=1 scores=12/27/7/13 steps=315
+seed=15000 seat=2 scores=28/4/30/23 steps=349
+seed=15000 seat=3 scores=14/13/12/58 steps=357
+{
+  "contender": "mcts",
+  "opponent": "hard-before-endgame",
+  "filler": "normal",
+  "duelWinRate": 1,
+  "duelMeanMargin": 18.25,
+  "duelRecord": {
+    "wins": 4,
+    "ties": 0,
+    "losses": 0
+  },
+  "rivalMeanScore": 20,
+  "start": 15000,
+  "seeds": 1,
+  "games": 4,
+  "fractionalWinRate": 1,
+  "approximate95Interval": null,
+  "meanScore": 38.25,
+  "opponentsMeanScore": 14.083333333333332,
+  "meanMarginAgainstBest": 18,
+  "decisionMs": {
+    "mean": 837.3390669707445,
+    "median": 0.018417000013869256,
+    "p95": 3302.831084000005,
+    "max": 4007.8910840000026
+  },
+  "rivalDecisionMs": {
+    "mean": 347.66306177479845,
+    "median": 0.08100000000558794,
+    "p95": 1219.4319160000014,
+    "max": 3543.478999999992
+  },
+  "elapsedSeconds": 444.84786225,
+  "legalActions": 1404
+}

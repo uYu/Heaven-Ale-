@@ -103,11 +103,11 @@ test('previous hard policy is retained unchanged', () => {
   );
 });
 
-test('default hard uses the frozen opening policy and switches to the new planner after round two', () => {
+test('hard-v2 preserves the previous opening policy and switches to the second planner after round two', () => {
   const opening = createGame(16);
-  assert.deepEqual(createAgent('hard')(opening), chooseAction(opening, 'hard-v1'));
+  assert.deepEqual(createAgent('hard-v2')(opening), chooseAction(opening, 'hard-v1'));
   let late = opening;
   while (late.round < 3) late = applyAction(late, baseline(late));
   const expected = createHardAgent()(late);
-  assert.deepEqual(createAgent('hard')(late), expected);
+  assert.deepEqual(createAgent('hard-v2')(late), expected);
 });

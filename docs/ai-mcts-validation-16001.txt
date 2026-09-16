@@ -1,0 +1,1 @@
+seed=16001 seat=0 scores=56/4/10/20 steps=363

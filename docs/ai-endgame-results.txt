@@ -1,0 +1,29 @@
+{"seed":12000,"seat":0,"oldScore":14,"newScore":14,"nodes":2}
+{"seed":12001,"seat":2,"oldScore":13,"newScore":13,"nodes":2}
+{"seed":12002,"seat":1,"oldScore":26,"newScore":26,"nodes":5}
+{"seed":12003,"seat":0,"oldScore":30,"newScore":30,"nodes":71}
+{"seed":12004,"seat":2,"oldScore":56,"newScore":56,"nodes":2}
+{"seed":12005,"seat":1,"oldScore":40,"newScore":40,"nodes":5}
+{"seed":12006,"seat":1,"oldScore":18,"newScore":18,"nodes":54}
+{"seed":12007,"seat":0,"oldScore":8,"newScore":8,"nodes":5}
+{"seed":12008,"seat":1,"oldScore":16,"newScore":16,"nodes":2}
+{"seed":12009,"seat":0,"oldScore":23,"newScore":23,"nodes":5}
+{"seed":12010,"seat":2,"oldScore":18,"newScore":18,"nodes":62}
+{"seed":12011,"seat":3,"oldScore":21,"newScore":21,"nodes":2}
+{"seed":12012,"seat":1,"oldScore":18,"newScore":18,"nodes":5}
+{"seed":12013,"seat":1,"oldScore":8,"newScore":8,"nodes":12}
+{"seed":12014,"seat":3,"oldScore":2,"newScore":2,"nodes":2}
+{"seed":12015,"seat":2,"oldScore":16,"newScore":16,"nodes":2}
+{"seed":12016,"seat":0,"oldScore":18,"newScore":18,"nodes":58}
+{"seed":12017,"seat":2,"oldScore":18,"newScore":18,"nodes":5}
+{"seed":12018,"seat":1,"oldScore":11,"newScore":11,"nodes":34}
+{"seed":12019,"seat":0,"oldScore":6,"newScore":10,"nodes":2130}
+{
+  "start": 12000,
+  "seeds": 20,
+  "improved": 1,
+  "tied": 19,
+  "gain": 4,
+  "meanSolveMs": 2.0922395999999948,
+  "maxSolveMs": 34.24983299999985
+}

@@ -9,6 +9,7 @@ import {
 import { chooseAction as baseline } from './ai.baseline.ts';
 import { chooseAction as normal, rankActions } from './ai.normal.ts';
 import { evaluate } from './ai.hard-v1.ts';
+import { solveEndgame } from './ai.endgame.ts';
 import type { Action, GameState, Resource, Tile } from './types.ts';
 
 export { evaluate };
@@ -16,6 +17,8 @@ export interface SearchOptions {
   nodes?: number;
   width?: number;
   rollouts?: number;
+  // Experimental: full-game seat-swapped validation did not show a strength gain.
+  endgame?: boolean;
 }
 export interface SearchResult {
   action: Action;
@@ -110,7 +113,7 @@ function complete(
   if (!ended(state, s)) return;
   return { state, plan, values: [], prior: evaluate(state, s.turn) };
 }
-function sampledDecks(
+export function sampledDecks(
   input: GameState,
   scenario: number,
 ): { resourceDeck: Tile[]; monkDeck: Tile[] } {
@@ -199,6 +202,22 @@ export function searchAction(input: GameState, options: SearchOptions = {}): Sea
   const s: GameState = { ...input, seed: 0, resourceDeck: [], monkDeck: [], actions: [], log: [] };
   const fallback = normal(s);
   const budget: Budget = { used: 0, limit: Math.max(1, Math.floor(options.nodes ?? 36000)) };
+  const endgame =
+    options.endgame !== true
+      ? undefined
+      : solveEndgame(s, Math.min(8000, Math.floor(budget.limit / 4)));
+  if (endgame?.solved)
+    return {
+      action: endgame.plan[0],
+      plan: endgame.plan,
+      nodes: endgame.nodes,
+      completedDepth: endgame.plan.length,
+      rolloutScenarios: 0,
+      candidates: legalActions(s).length,
+      value: endgame.value,
+    };
+  // Incomplete exact trees never compete with fully evaluated candidates.
+  budget.used = endgame?.nodes ?? 0;
   const maxCandidates = Math.max(2, Math.floor(options.width ?? 28));
   const maxScenarios = Math.max(0, Math.floor(options.rollouts ?? 8));
   const ranked = rankActions(s),
@@ -207,7 +226,7 @@ export function searchAction(input: GameState, options: SearchOptions = {}): Sea
     (a, b) => (ranks.get(key(b)) ?? -1000) - (ranks.get(key(a)) ?? -1000),
   );
   const unique = new Map<string, Candidate>();
-  const generation: Budget = { used: 0, limit: Math.min(budget.limit, 1600) };
+  const generation: Budget = { used: 0, limit: Math.min(budget.limit - budget.used, 1600) };
   // First cover root actions, then alternative continuations. The original and normal
   // policies' first choices are always considered before heuristic pruning.
   const rootActions = [normal(s), baseline(s), ...actions].filter(
@@ -227,7 +246,7 @@ export function searchAction(input: GameState, options: SearchOptions = {}): Sea
       ]);
       if (!unique.has(identity)) unique.set(identity, c);
     }
-  budget.used = generation.used;
+  budget.used += generation.used;
   const all = [...unique.values()];
   // Round-robin over root actions before spending slots on a second continuation.
   const selected: Candidate[] = [],

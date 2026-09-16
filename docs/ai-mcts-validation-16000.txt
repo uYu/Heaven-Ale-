@@ -1,0 +1,1 @@
+seed=16000 seat=0 scores=38/24/17/12 steps=349
