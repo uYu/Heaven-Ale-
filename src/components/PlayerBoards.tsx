@@ -75,10 +75,12 @@ export function ProductionBoard({
   player,
   before,
   children,
+  controls,
 }: {
   player: Player;
   before?: Player;
   children: ReactNode;
+  controls?: ReactNode;
 }) {
   const positions = [...player.resources, player.master],
     oldPositions = before ? [...before.resources, before.master] : positions;
@@ -175,6 +177,7 @@ export function ProductionBoard({
           ))}
         </div>
       </div>
+      {controls}
       <div className="player-mat-canvas">
         <svg
           viewBox="0 0 900 980"

@@ -8,11 +8,14 @@ import {
 } from './engine.ts';
 import { chooseAction as baseline } from './ai.baseline.ts';
 import { chooseAction as normal, rankActions } from './ai.normal.ts';
-import { evaluate } from './ai.hard-v1.ts';
+import { evaluate as evaluateLegacy } from './ai.hard-v1.ts';
+import { roundsForPlayers } from './data.ts';
+export function evaluate(s: GameState, player: number) {
+  return evaluateLegacy({ ...s, round: s.round + 6 - roundsForPlayers(s.players.length) }, player);
+}
 import { solveEndgame } from './ai.endgame.ts';
 import type { Action, GameState, Resource, Tile } from './types.ts';
 
-export { evaluate };
 export interface SearchOptions {
   nodes?: number;
   width?: number;
@@ -152,7 +155,10 @@ export function sampledDecks(
         if (!seen.has(id)) monks.push({ id, kind: 'monk', monk });
       }
     resourceDeck.push(...shuffle(resources));
-    monkDeck.push(...shuffle(monks));
+    const shuffledMonks = shuffle(monks);
+    const seenEra = [...seen].filter((id) => id.startsWith(`m${era}`)).length;
+    const eraSupply = era === 0 ? 12 : roundsForPlayers(input.players.length) * 4 - 12;
+    monkDeck.push(...shuffledMonks.slice(0, Math.max(0, eraSupply - seenEra)));
   }
   return { resourceDeck, monkDeck };
 }
@@ -347,7 +353,7 @@ export function chooseAction(s: GameState): Action {
 }
 
 export function publicStateKey(s: GameState): string {
-  return key([s.round, s.turn, s.phase, s.players, s.market, s.barrelSupply]);
+  return key([s.round, s.turn, s.turnOrder, s.phase, s.players, s.market, s.barrelSupply]);
 }
 // A private planner per opponent. Reuse only an exact public-state match within the
 // current transaction. A changed board, undo, import or new game invalidates it.

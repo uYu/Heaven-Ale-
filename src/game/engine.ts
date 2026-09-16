@@ -1,4 +1,5 @@
 import {
+  roundsForPlayers,
   BARREL_GOALS,
   CARD_INFO,
   CELLS,
@@ -13,9 +14,24 @@ import {
   neighbours,
   slotName,
 } from './data.ts';
-import type { Action, BuyPhase, GameState, Player, Resource, Result, Slot, Tile } from './types.ts';
+import type {
+  Action,
+  BuyPhase,
+  GameSetup,
+  GameState,
+  Player,
+  Resource,
+  Result,
+  Slot,
+  Tile,
+} from './types.ts';
 
-export function createGame(seed = Date.now() >>> 0): GameState {
+export function createGame(seed = Date.now() >>> 0, setup?: GameSetup): GameState {
+  const count = setup?.playerCount ?? 4;
+  requireRule(
+    [2, 3, 4].includes(count) && (!setup || typeof setup.randomStart === 'boolean'),
+    '人数必须为 2–4 人。',
+  );
   let random = seed >>> 0;
   const next = () => {
     random = (random + 0x6d2b79f5) | 0;
@@ -50,7 +66,7 @@ export function createGame(seed = Date.now() >>> 0): GameState {
     resourceDeck.push(...shuffle(resources));
     monkDeck.push(...shuffle(monks));
   }
-  const players: Player[] = ['你', '本笃', '克拉拉', '安瑟伦'].map((name, id) => ({
+  const players: Player[] = ['你', '本笃', '克拉拉', '安瑟伦'].slice(0, count).map((name, id) => ({
     id,
     name,
     coins: 25,
@@ -65,15 +81,32 @@ export function createGame(seed = Date.now() >>> 0): GameState {
     position: -1,
     home: null,
   }));
-  // House rule: the human starts. Other seats choose in reverse order as in setup.
-  players[3].master++;
-  players[2].resources[4] += 2;
-  players[1].coins += 2;
+  const order = players.map((p) => p.id);
+  if (setup?.randomStart) shuffle(order);
+  // Starting rewards are selected in reverse seating order, using the existing local convention.
+  const rewards: string[] = [];
+  order
+    .slice(1)
+    .reverse()
+    .forEach((id, index) => {
+      if (index === 0) {
+        players[id].master++;
+        rewards.push(`${players[id].name}获得酿酒师 +1`);
+      } else if (index === 1) {
+        players[id].resources[4] += 2;
+        rewards.push(`${players[id].name}获得大麦 +2`);
+      } else {
+        players[id].coins += 2;
+        rewards.push(`${players[id].name}获得金币 +2`);
+      }
+    });
+  monkDeck.splice(roundsForPlayers(count) * 4);
   const s: GameState = {
+    ...(setup ? { setup: { ...setup }, turnOrder: order } : {}),
     version: 1,
     seed: seed >>> 0,
     round: 1,
-    turn: 0,
+    turn: order[0],
     players,
     market: makeMarket(),
     resourceDeck,
@@ -87,7 +120,9 @@ export function createGame(seed = Date.now() >>> 0): GameState {
   refill(s);
   log(
     s,
-    '六轮酿酒竞赛开始。你是起始玩家；安瑟伦获得酿酒师 +1，克拉拉获得大麦 +2，本笃获得金币 +2。',
+    setup
+      ? `${count} 人 ${roundsForPlayers(count)} 轮对局开始。行动座次：${order.map((id) => players[id].name).join(' → ')}；${players[order[0]].name}先手。${rewards.join('，')}。`
+      : '六轮酿酒竞赛开始。你是起始玩家；安瑟伦获得酿酒师 +1，克拉拉获得大麦 +2，本笃获得金币 +2。',
     null,
   );
   return s;
@@ -105,7 +140,16 @@ function refill(s: GameState) {
       const tile = s.monkDeck.shift();
       if (tile) space.tiles.push(tile);
     }
-    if (space.type === 'score') space.disc = true;
+    if (space.type === 'score')
+      space.disc =
+        s.players.length < 4 &&
+        s.round === roundsForPlayers(s.players.length) &&
+        (space.scoring === 'B' ||
+          space.scoring === 'C' ||
+          (s.players.length === 3 &&
+            s.market.indexOf(space) === s.market.findIndex((m) => m.scoring === 'ABC')))
+          ? 2
+          : true;
   }
 }
 export function advanceResource(p: Player, color: number, steps: number) {
@@ -199,7 +243,7 @@ export function canVisit(s: GameState, index: number) {
   if (index === TRACK_END) return true;
   const space = s.market[index];
   if (space.type === 'barrel') return claimable(s).length > 0;
-  if (space.type === 'score') return space.disc && scoreOptions(s, index).length > 0;
+  if (space.type === 'score') return !!space.disc && scoreOptions(s, index).length > 0;
   return space.tiles.some((t) =>
     CELLS.some(
       (c) =>
@@ -211,9 +255,9 @@ export function canVisit(s: GameState, index: number) {
 }
 function nextTurn(s: GameState) {
   if (s.players.every((p) => p.home !== null)) {
-    if (s.round === 6) {
+    if (s.round === roundsForPlayers(s.players.length)) {
       s.phase = { kind: 'finished' };
-      log(s, '所有修道院结束第六轮，进入最终结算。', null);
+      log(s, `所有修道院结束第 ${s.round} 轮，进入最终结算。`, null);
       return;
     }
     s.round++;
@@ -230,7 +274,8 @@ function nextTurn(s: GameState) {
     );
   } else {
     do {
-      s.turn = (s.turn + 1) % 4;
+      const order = s.turnOrder ?? s.players.map((p) => p.id);
+      s.turn = order[(order.indexOf(s.turn) + 1) % order.length];
     } while (s.players[s.turn].home !== null);
   }
   s.phase = { kind: 'move' };
@@ -405,7 +450,8 @@ function executeAction(s: GameState, action: Action): GameState {
         '该计分位已使用，或没有对应板块。',
       );
       const before = { coins: p.coins, resources: [...p.resources], master: p.master };
-      s.market[s.phase.space].disc = false;
+      const scoringSpace = s.market[s.phase.space];
+      scoringSpace.disc = Number(scoringSpace.disc) > 1 ? Number(scoringSpace.disc) - 1 : false;
       p.scored.push(action.slot);
       for (const [id, t] of Object.entries(p.garden)) {
         const cell = Number(id);
@@ -482,7 +528,7 @@ function executeAction(s: GameState, action: Action): GameState {
       );
       requireRule(
         !(
-          s.players.filter((x) => x.home !== null).length === 3 &&
+          s.players.filter((x) => x.home !== null).length === s.players.length - 1 &&
           !s.players.some((x) => x.home === 0)
         ) || action.slot === 0,
         '最后返回且先手位空缺时，必须选择先手位。',
@@ -546,7 +592,7 @@ export function legalActions(s: GameState): Action[] {
       if (s.players.some((x) => x.home === slot)) continue;
       if (
         slot !== 0 &&
-        s.players.filter((x) => x.home !== null).length === 3 &&
+        s.players.filter((x) => x.home !== null).length === s.players.length - 1 &&
         !s.players.some((x) => x.home === 0)
       )
         continue;
@@ -605,9 +651,21 @@ export function calculateResult(p: Player): Result {
 }
 export function assertInvariants(s: GameState) {
   requireRule(
-    s.players.length === 4 && s.turn >= 0 && s.turn < 4 && s.round >= 1 && s.round <= 6,
+    [2, 3, 4].includes(s.players.length) &&
+      s.turn >= 0 &&
+      s.turn < s.players.length &&
+      s.round >= 1 &&
+      s.round <= roundsForPlayers(s.players.length),
     '对局结构异常。',
   );
+  if (s.turnOrder)
+    requireRule(
+      s.turnOrder.length === s.players.length &&
+        new Set(s.turnOrder).size === s.players.length &&
+        s.turnOrder.every((id) => Number.isInteger(id) && id >= 0 && id < s.players.length),
+      '行动座次异常。',
+    );
+  const totalTiles = 100 + roundsForPlayers(s.players.length) * 4;
   const ids: string[] = [...s.resourceDeck, ...s.monkDeck, ...s.market.flatMap((m) => m.tiles)].map(
     (t) => t.id,
   );
@@ -632,7 +690,7 @@ export function assertInvariants(s: GameState) {
         '未围合的棚屋。',
       );
   }
-  requireRule(ids.length === 124 && new Set(ids).size === 124, '板块丢失或重复。');
+  requireRule(ids.length === totalTiles && new Set(ids).size === totalTiles, '板块丢失或重复。');
   for (let i = 0; i < 12; i++)
     requireRule(
       s.barrelSupply[i] + s.players.flatMap((p) => p.barrels).filter((b) => b.goal === i).length ===

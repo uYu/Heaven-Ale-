@@ -1,4 +1,11 @@
-import { CELLS, SCORE_PAIRS, TRACK_END, masterLevel, neighbours } from './data.ts';
+import {
+  roundsForPlayers,
+  CELLS,
+  SCORE_PAIRS,
+  TRACK_END,
+  masterLevel,
+  neighbours,
+} from './data.ts';
 import {
   activate,
   advanceResource,
@@ -39,7 +46,7 @@ function purchaseValue(s: GameState, p: Player, space: number, tile: Tile, cell:
   const c = CELLS[cell],
     cost = price(s, tile, cell, space),
     shadow = c.side === 'shade',
-    round = s.round;
+    round = s.round + 6 - roundsForPlayers(s.players.length);
   const around = neighbours(cell).filter((n) => p.garden[n]),
     monks = around.filter((n) => p.garden[n].kind === 'monk');
   let value = 0;
@@ -117,7 +124,7 @@ function scoreValue(s: GameState, p: Player, option: { slot: string; value?: num
   }
   const pair = SCORE_PAIRS.find((v) => v.includes(option.slot as never));
   const pairValue = pair?.some((slot) => p.scored.includes(slot)) && p.cards.length ? 4 : 0;
-  const opportunityCost = (7 - s.round) * 0.8;
+  const opportunityCost = (roundsForPlayers(s.players.length) + 1 - s.round) * 0.8;
   return delta(p, after, s.round) + pairValue - opportunityCost;
 }
 export function rankActions(s: GameState): { action: Action; value: number }[] {
@@ -132,7 +139,7 @@ export function rankActions(s: GameState): { action: Action; value: number }[] {
         ['barrel', 'color', 'lowest', 'master', 'coins'].indexOf(a.card) -
         ['barrel', 'color', 'lowest', 'master', 'coins'].indexOf(b.card),
     );
-  if (s.round === 6 && s.phase.kind === 'home' && emergency.length)
+  if (s.round === roundsForPlayers(s.players.length) && s.phase.kind === 'home' && emergency.length)
     return [{ action: emergency[0], value: 0 }];
   if (
     s.phase.kind === 'buy' &&
@@ -197,7 +204,8 @@ export function rankActions(s: GameState): { action: Action; value: number }[] {
         );
       if (action.card === 'lowest') advanceResource(after, action.color!, p.scored.length);
       value = delta(p, after, s.round);
-      if (action.card === 'barrel') value = p.barrels.length + (6 - s.round) * 0.5;
+      if (action.card === 'barrel')
+        value = p.barrels.length + (roundsForPlayers(s.players.length) - s.round) * 0.5;
       if (action.card === 'skip') value = -2;
     }
     if (action.type === 'home') {
@@ -205,7 +213,12 @@ export function rankActions(s: GameState): { action: Action; value: number }[] {
       if (action.slot === 1) after.master = Math.min(20, after.master + 1);
       if (action.slot === 2) advanceResource(after, action.color!, 2);
       if (action.slot === 3) after.coins += 2;
-      value = action.slot === 0 ? (s.round === 6 ? 1.4 : 2.4) : delta(p, after, s.round);
+      value =
+        action.slot === 0
+          ? s.round === roundsForPlayers(s.players.length)
+            ? 1.4
+            : 2.4
+          : delta(p, after, s.round);
     }
     return { action, value: value + Math.sin((s.seed % 997) + order * 13 + p.id * 7) * 0.035 };
   });

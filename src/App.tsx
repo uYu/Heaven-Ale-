@@ -37,6 +37,7 @@ import {
   Droplets,
 } from 'lucide-react';
 import {
+  roundsForPlayers,
   BARREL_GOALS,
   CARD_INFO,
   CELLS,
@@ -60,6 +61,9 @@ import {
   shedOptions,
   tileName,
 } from './game/engine.ts';
+import { describeActivity } from './game/activity.ts';
+import type { Activity } from './game/activity.ts';
+import { OpponentActivity } from './components/OpponentActivity.tsx';
 import { privilegePreview } from './game/preview.ts';
 import { deserializeSession, loadSession, SAVE_KEY, serializeSession } from './game/storage.ts';
 import {
@@ -84,13 +88,28 @@ function ResourceIcon({
   const Icon = resourceIcons[color];
   return <Icon size={size} strokeWidth={1.7} {...props} />;
 }
-function Pawn({ player, small = false }: { player: number; small?: boolean }) {
+const PLAYER_MARKS = ['你', '本', '克', '安'];
+function Pawn({
+  player,
+  small = false,
+  map = false,
+  selected = false,
+  name,
+}: {
+  player: number;
+  small?: boolean;
+  map?: boolean;
+  selected?: boolean;
+  name?: string;
+}) {
   return (
     <span
-      className={`pawn ${small ? 'small' : ''}`}
+      className={`pawn ${small ? 'small' : ''} ${map ? 'map-pawn' : ''} ${selected ? 'is-viewed' : ''}`}
+      title={name ? `${name}${selected ? ' · 正在查看' : ''}` : undefined}
+      aria-label={name}
       style={{ '--player': PLAYER_COLORS[player] } as CSSProperties}
     >
-      <UserRound size={small ? 10 : 15} />
+      {map ? <b>{PLAYER_MARKS[player]}</b> : <UserRound size={small ? 10 : 15} />}
     </span>
   );
 }
@@ -136,16 +155,24 @@ function Market({
   state,
   dispatch,
   paused,
+  viewedPlayer,
+  onInspect,
 }: {
   state: GameState;
   dispatch: (a: Action) => void;
   paused: boolean;
+  viewedPlayer: number;
+  onInspect: (id: number) => void;
 }) {
   const human = state.turn === 0 && !paused,
     p = state.players[state.turn];
   const [mobileMap, setMobileMap] = useState(false);
   return (
-    <section className={`market-wrap ${mobileMap ? 'mobile-map' : 'mobile-road'}`}>
+    <section
+      id="market-area"
+      tabIndex={-1}
+      className={`market-wrap ${mobileMap ? 'mobile-map' : 'mobile-road'}`}
+    >
       <div className="section-heading">
         <div>
           <span className="eyebrow">THE MONASTERY ROAD</span>
@@ -156,6 +183,21 @@ function Market({
         <span className="board-legend">
           <span className="legend-dot" /> 可前往 <span className="legend-dot purple" /> 计分
         </span>
+      </div>
+      <div className="map-player-legend" aria-label="地图玩家标记">
+        {state.players.map((player) => (
+          <button
+            key={player.id}
+            aria-pressed={viewedPlayer === player.id}
+            onClick={() => onInspect(player.id)}
+            style={{ '--player': PLAYER_COLORS[player.id] } as CSSProperties}
+          >
+            <Pawn player={player.id} map name={player.name} />
+            <span>{player.name}</span>
+            {viewedPlayer === player.id && <Check size={14} />}
+          </button>
+        ))}
+        <small>勾选表示正在查看的玩家</small>
       </div>
       <div className="mobile-market-controls" aria-label="地图显示方式">
         <button aria-pressed={!mobileMap} onClick={() => setMobileMap(false)}>
@@ -181,7 +223,9 @@ function Market({
             <br />
             返回修道院
           </p>
-          <div className="ring-round">第 {state.round} / 6 轮</div>
+          <div className="ring-round">
+            第 {state.round} / {roundsForPlayers(state.players.length)} 轮
+          </div>
           <p>
             可跳过格子
             <br />
@@ -222,14 +266,16 @@ function Market({
           </div>
           <div className="table-rounds">
             <strong>轮次</strong>
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <span
-                key={n}
-                className={n === state.round ? 'current' : n < state.round ? 'past' : ''}
-              >
-                {n}
-              </span>
-            ))}
+            {Array.from({ length: roundsForPlayers(state.players.length) }, (_, i) => i + 1).map(
+              (n) => (
+                <span
+                  key={n}
+                  className={n === state.round ? 'current' : n < state.round ? 'past' : ''}
+                >
+                  {n}
+                </span>
+              ),
+            )}
             <small>顺时针沿外圈前进 →</small>
           </div>
         </div>
@@ -248,7 +294,7 @@ function Market({
             {state.players
               .filter((p) => p.position === -1 || p.position === TRACK_END)
               .map((p) => (
-                <Pawn key={p.id} player={p.id} small />
+                <Pawn key={p.id} player={p.id} map selected={viewedPlayer === p.id} name={p.name} />
               ))}
           </div>
         </button>
@@ -262,7 +308,7 @@ function Market({
               : space.type === 'monk'
                 ? `${space.tiles.map(tileName).join('、') || '修士已售罄'}：阴面 ${space.cost} / 阳面 ${space.cost! * 2} 金币`
                 : space.type === 'score'
-                  ? `${space.scoring} 类计分${space.disc ? '' : '（已取走）'}`
+                  ? `${space.scoring} 类计分${space.disc ? `（剩余 ${Number(space.disc)} 枚）` : '（已取走）'}`
                   : '领取所有已达成的可用酒桶';
           return (
             <button
@@ -301,9 +347,20 @@ function Market({
                       : '酒桶奖励'}
               </span>
               {space.tiles.length > 1 && <span className="stack-count">{space.tiles.length}</span>}
+              {space.type === 'score' && Number(space.disc) > 1 && (
+                <span className="stack-count" aria-label={`剩余 ${space.disc} 枚计分圆片`}>
+                  {Number(space.disc)}
+                </span>
+              )}
               <div className="space-pawns">
                 {occupants.map((p) => (
-                  <Pawn key={p.id} player={p.id} small />
+                  <Pawn
+                    key={p.id}
+                    player={p.id}
+                    map
+                    selected={viewedPlayer === p.id}
+                    name={p.name}
+                  />
                 ))}
               </div>
             </button>
@@ -355,6 +412,67 @@ function Market({
         </div>
       </details>
     </section>
+  );
+}
+function scrollToArea(id: string) {
+  const target = document.getElementById(id);
+  target?.scrollIntoView({
+    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+    block: 'start',
+  });
+  target?.focus({ preventScroll: true });
+}
+
+function PurchasePicker({
+  state,
+  selectedTile,
+  onSelect,
+}: {
+  state: GameState;
+  selectedTile: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const phase = state.phase;
+  if (phase.kind !== 'buy') return null;
+  const player = state.players[0];
+  return (
+    <div className="shop-tiles" aria-label="选择购买板块">
+      {state.market[phase.space].tiles.map((tile) => {
+        const empty = CELLS.filter((cell) => cell.side !== 'shed' && !player.garden[cell.id]);
+        const affordable = empty.some(
+          (cell) => price(state, tile, cell.id, phase.space) <= player.coins,
+        );
+        const cost = tile.kind === 'resource' ? tile.value : state.market[phase.space].cost!;
+        return (
+          <button
+            key={tile.id}
+            className={selectedTile === tile.id ? 'chosen' : ''}
+            disabled={!affordable}
+            aria-pressed={selectedTile === tile.id}
+            aria-label={`选择${tileName(tile)}，阳面 ${cost * 2} 金币，阴面 ${cost} 金币${!affordable ? '，无法放置' : ''}`}
+            onClick={() => onSelect(tile.id)}
+          >
+            <TileBadge tile={tile} />
+            <span>{tileName(tile)}</span>
+            <small>
+              <Sun size={12} />
+              {cost * 2}
+              <Moon size={12} />
+              {cost}
+            </small>
+            <span className="tile-availability">
+              {!empty.length
+                ? '花园已满'
+                : !affordable
+                  ? '金币不足'
+                  : selectedTile === tile.id
+                    ? '已选 · 点击空地'
+                    : '选择板块'}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 function Garden({
@@ -445,7 +563,8 @@ function Garden({
               transform={`translate(${190 + c.x * 21.4},${36 + c.y * 37})`}
               role={selectable ? 'button' : undefined}
               tabIndex={selectable ? 0 : undefined}
-              aria-label={`花园第${c.id + 1}格，${c.side === 'shed' ? '棚屋' : c.side === 'sun' ? '阳面' : '阴面'}${t ? `，${tileName(t)}` : '，空地'}`}
+              aria-label={`花园第${c.id + 1}格，${c.side === 'shed' ? '棚屋' : c.side === 'sun' ? '阳面' : '阴面'}${t ? `，${tileName(t)}` : '，空地'}${tile && phase.kind === 'buy' && c.side !== 'shed' && !t ? `，费用 ${price(state, tile, c.id, phase.space)} 金币${!selectable ? '，不可放置' : ''}` : ''}`}
+              aria-pressed={selectable && phase.kind === 'shed' ? selected : undefined}
               onClick={() => chooseCell(c.id)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -528,8 +647,8 @@ function Garden({
                   </text>
                 </>
               ) : selectable ? (
-                <text y="5" textAnchor="middle" fill="#537c5a" fontSize="19">
-                  +
+                <text y="5" textAnchor="middle" fill="#537c5a" fontSize={tile ? '12' : '19'}>
+                  {tile && phase.kind === 'buy' ? price(state, tile, c.id, phase.space) : '+'}
                 </text>
               ) : (
                 <circle r="1.7" fill={c.side === 'sun' ? '#cbbb8d' : '#a5b79b'} />
@@ -558,8 +677,8 @@ function Rules() {
       <span className="eyebrow">A LITTLE GUIDANCE</span>
       <h2>酿一杯好酒，从这里开始</h2>
       <p>
-        你与三位 AI
-        各自经营一座修道院。在六轮竞争中，积累金币、规划花园，让五种资源与酿酒师共同成长。
+        你与 1–3 位 AI 各自经营一座修道院。2 人玩 3 轮、3 人玩 4 轮、4 人玩 6
+        轮。在竞争中，积累金币、规划花园，让五种资源与酿酒师共同成长。
       </p>
       <div className="rules-grid">
         {[
@@ -601,7 +720,7 @@ function Rules() {
           [
             '07',
             '最终结算',
-            '第六轮结束，先按酿酒师兑换率消耗领先资源，补足最落后的资源；再以每 10 金币推进最落后资源 1 步。最落后资源的正数位置乘以倍率，加上酒桶、酒桶特权与先手 1 分。并列最高分共享胜利。',
+            '最后一轮结束，先按酿酒师兑换率消耗领先资源，补足最落后的资源；再以每 10 金币推进最落后资源 1 步。最落后资源的正数位置乘以倍率，加上酒桶、酒桶特权与先手 1 分。并列最高分共享胜利。',
           ],
           [
             '08',
@@ -647,7 +766,7 @@ function Rules() {
         </tbody>
       </table>
       <p className="muted">
-        本局固定由你先手，其他三位玩家按逆时针顺序获得起始奖励。图形与中文界面为本项目重新制作。
+        新局随机排列座次与先手，其他玩家按逆座次自动获得起始奖励。旧存档沿用原先的座次。图形与中文界面为本项目重新制作。
         <a href="https://www.rulespal.com/heaven-and-ale/rulebook" target="_blank" rel="noreferrer">
           查看基础版规则 ↗
         </a>
@@ -670,7 +789,7 @@ function Results({ state }: { state: GameState }) {
             .join('、')}
           {results.filter((r) => r.total === highest).length > 1 ? '并列获胜' : '酿出了最佳佳酿'}
         </h2>
-        <p>六轮耕耘，终得醇香。每一分都有迹可循。</p>
+        <p>悉心耕耘，终得醇香。每一分都有迹可循。</p>
       </div>
       <div className="result-cards">
         {results.map((r, i) => (
@@ -789,8 +908,7 @@ function BarrelCollection({
 function ActionPanel({
   state,
   dispatch,
-  selectedTile,
-  setSelectedTile,
+  onGarden,
   selectedCells,
   paused,
   onResume,
@@ -803,8 +921,7 @@ function ActionPanel({
 }: {
   state: GameState;
   dispatch: (a: Action) => void;
-  selectedTile: string | null;
-  setSelectedTile: (t: string | null) => void;
+  onGarden: () => void;
   selectedCells: number[];
   paused: boolean;
   onResume: () => void;
@@ -829,7 +946,7 @@ function ActionPanel({
       finished: '佳酿已成',
     };
   return (
-    <aside className="action-sidebar">
+    <aside className="action-sidebar" id="current-action" tabIndex={-1}>
       <section className="action-panel">
         <div className="action-panel-top">
           <span className="eyebrow">
@@ -839,7 +956,7 @@ function ActionPanel({
         </div>
         <h2>
           {phase.kind === 'finished'
-            ? '六轮酿造已完成'
+            ? '本局酿造已完成'
             : human
               ? ready
                 ? '确认本回合'
@@ -984,30 +1101,14 @@ function ActionPanel({
             {phase.kind === 'buy' && (
               <>
                 <p>
-                  先选择板块，再点击下方花园的空格种植。
+                  在花园上方选择板块，再点空地种植。
                   {phase.bought
                     ? '你可以继续购买同格板块，或预览本回合结果。'
                     : '本次至少需要购买一块。'}
                 </p>
-                <div className="shop-tiles">
-                  {state.market[phase.space].tiles.map((t) => (
-                    <button
-                      className={selectedTile === t.id ? 'chosen' : ''}
-                      key={t.id}
-                      onClick={() => setSelectedTile(t.id)}
-                      aria-label={`选择${tileName(t)}`}
-                    >
-                      <TileBadge tile={t} />
-                      <span>{tileName(t)}</span>
-                      <small>
-                        <Sun size={12} />
-                        {(t.kind === 'resource' ? t.value : state.market[phase.space].cost!) * 2}
-                        <Moon size={12} />
-                        {t.kind === 'resource' ? t.value : state.market[phase.space].cost}
-                      </small>
-                    </button>
-                  ))}
-                </div>
+                <button className="secondary full" onClick={onGarden}>
+                  <Sprout size={16} /> 选择板块并放入花园
+                </button>
                 {!state.market[phase.space].tiles.length && (
                   <div className="empty-state small">
                     <Check size={22} />
@@ -1294,18 +1395,56 @@ function Modal({
   );
 }
 
+function savedOpponentActivity(state: GameState): Activity[] {
+  return state.log
+    .filter((entry) => entry.player !== null && entry.player !== 0)
+    .slice(-12)
+    .reverse()
+    .map((entry) => ({
+      id: -entry.id - 1,
+      player: entry.player!,
+      round: entry.round,
+      text: entry.text,
+      changes: [],
+    }));
+}
+
 export default function App() {
   const [boot] = useState(loadSession),
     [session, setSession] = useState(boot.session),
     [view, setView] = useState<'table' | 'goals' | 'journal' | 'rules'>('table'),
     [gardenPlayer, setGardenPlayer] = useState(0);
   const { visible: state, ready } = useMemo(() => inspectSession(session), [session]);
+  const [opponentEvents, setOpponentEvents] = useState<Activity[]>(() =>
+    savedOpponentActivity(boot.session.committed),
+  );
+  const previousCommitted = useRef(session.committed);
+  useEffect(() => {
+    const before = previousCommitted.current;
+    const after = session.committed;
+    previousCommitted.current = after;
+    if (before === after) return;
+    if (before.seed !== after.seed || after.revision < before.revision) {
+      setOpponentEvents(savedOpponentActivity(after));
+      return;
+    }
+    if (before.turn !== 0 && after.revision === before.revision + 1) {
+      const action = after.actions[after.actions.length - 1];
+      if (action.type === 'endBuy') return;
+      const event = describeActivity(before, after, action);
+      setOpponentEvents((events) => [event, ...events].slice(0, 12));
+    }
+  }, [session.committed]);
+  const [newPlayerCount, setNewPlayerCount] = useState<2 | 3 | 4>(
+    state.players.length as 2 | 3 | 4,
+  );
   const [difficulty, setDifficulty] = useState<Difficulty>('hard');
+  const [newDifficulty, setNewDifficulty] = useState<Difficulty>('hard');
   const aiRequest = useRef(0);
   const [selectedTile, setSelectedTile] = useState<string | null>(null),
     [selectedCells, setSelectedCells] = useState<number[]>([]),
     [paused, setPaused] = useState(false),
-    [speed, setSpeed] = useState(650);
+    [speed, setSpeed] = useState(1200);
   const [modal, setModal] = useState<'settings' | 'new' | null>(null),
     [toast, setToast] = useState(
       boot.error || (boot.restored ? '已恢复上次对局，可以继续酿造。' : ''),
@@ -1314,8 +1453,7 @@ export default function App() {
     [saveEnabled, setSaveEnabled] = useState(!boot.error),
     [logFilter, setLogFilter] = useState('all');
   const worker = useRef<Worker | null>(null),
-    importInput = useRef<HTMLInputElement>(null),
-    gardenRef = useRef<HTMLDivElement>(null);
+    importInput = useRef<HTMLInputElement>(null);
   const dispatch = (action: Action) => {
     setSession((previous) => {
       try {
@@ -1422,20 +1560,35 @@ export default function App() {
     const phase = state.phase;
     if (phase.kind === 'buy') {
       setSelectedTile((previous) =>
-        state.market[phase.space].tiles.some((t) => t.id === previous)
+        state.market[phase.space].tiles.some(
+          (t) =>
+            t.id === previous &&
+            CELLS.some(
+              (c) =>
+                c.side !== 'shed' &&
+                !state.players[0].garden[c.id] &&
+                price(state, t, c.id, phase.space) <= state.players[0].coins,
+            ),
+        )
           ? previous
-          : (state.market[phase.space].tiles[0]?.id ?? null),
+          : (state.market[phase.space].tiles.find((t) =>
+              CELLS.some(
+                (c) =>
+                  c.side !== 'shed' &&
+                  !state.players[0].garden[c.id] &&
+                  price(state, t, c.id, phase.space) <= state.players[0].coins,
+              ),
+            )?.id ?? null),
       );
     } else setSelectedTile(null);
     if (state.turn === 0 && ['buy', 'shed'].includes(phase.kind)) setGardenPlayer(0);
   }, [state]);
   useEffect(() => {
-    if (state.turn === 0 && ['buy', 'shed'].includes(state.phase.kind)) {
-      gardenRef.current
-        ?.querySelector('.garden-and-production')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }, [state.phase.kind, state.turn]);
+    if (view !== 'table' || state.turn !== 0 || paused || modal) return;
+    if (ready) scrollToArea('current-action');
+    else if (state.phase.kind === 'buy') scrollToArea('purchase-area');
+    else if (state.phase.kind === 'shed') scrollToArea('garden-area');
+  }, [state.phase.kind, state.turn, ready, view, paused, modal]);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(''), 6000);
@@ -1458,6 +1611,8 @@ export default function App() {
     try {
       if (file.size > 2_000_000) throw new Error('存档文件过大。');
       const restored = deserializeSession(await file.text());
+      previousCommitted.current = restored.committed;
+      setOpponentEvents(savedOpponentActivity(restored.committed));
       setSession(restored);
       setSaveEnabled(true);
       setPaused(false);
@@ -1472,16 +1627,21 @@ export default function App() {
     }
   };
   const newGame = () => {
-    setSession({ committed: createGame(), draft: [] });
+    setDifficulty(newDifficulty);
+    setOpponentEvents([]);
+    const game = createGame(undefined, { playerCount: newPlayerCount, randomStart: true });
+    setSession({ committed: game, draft: [] });
     setSaveEnabled(true);
     setPaused(false);
     setModal(null);
     setView('table');
     setGardenPlayer(0);
-    setToast('新的一局开始了。');
+    setToast(`${newPlayerCount} 人对局开始，${game.players[game.turn].name}先手。`);
   };
   const player = state.players[gardenPlayer],
-    finished = state.phase.kind === 'finished';
+    finished = state.phase.kind === 'finished',
+    purchaseDone =
+      state.turn === 0 && state.phase.kind === 'buy' && state.phase.bought > 0 && !selectedTile;
   return (
     <div className={`app-shell ${view === 'table' ? 'tabletop-mode' : ''}`}>
       <nav className="rail" aria-label="主导航">
@@ -1543,7 +1703,11 @@ export default function App() {
             <button
               className="new-game-button"
               aria-label="新的一局"
-              onClick={() => setModal('new')}
+              onClick={() => {
+                setNewDifficulty(difficulty);
+                setNewPlayerCount(state.players.length as 2 | 3 | 4);
+                setModal('new');
+              }}
             >
               <Plus size={15} />
               <span>新的一局</span>
@@ -1556,7 +1720,7 @@ export default function App() {
               <div className="breadcrumb">
                 修道院 <ChevronRight size={11} />{' '}
                 {view === 'table'
-                  ? '四人对局'
+                  ? `${state.players.length} 人对局`
                   : view === 'goals'
                     ? '酒桶目标'
                     : view === 'journal'
@@ -1574,7 +1738,7 @@ export default function App() {
               </h1>
               <p>
                 {view === 'table'
-                  ? '经营你的修道院，在六轮时光里酿出最好的啤酒。'
+                  ? `经营你的修道院，在 ${roundsForPlayers(state.players.length)} 轮时光里酿出最好的啤酒。`
                   : view === 'goals'
                     ? '达成目标后，前往道路上的酒桶格领取奖励。'
                     : view === 'journal'
@@ -1584,13 +1748,15 @@ export default function App() {
             </div>
             <div className="session-meta">
               <span className="session-pill">
-                <span /> 本地对局 · 1 人 + 3 AI
+                <span /> 本地对局 · 你 + {state.players.length - 1} 位 AI
               </span>
               <div className="round-progress">
-                {Array.from({ length: 6 }, (_, i) => (
+                {Array.from({ length: roundsForPlayers(state.players.length) }, (_, i) => (
                   <span key={i} className={i < state.round ? 'filled' : ''} />
                 ))}
-                <b>{state.round} / 6 轮</b>
+                <b>
+                  {state.round} / {roundsForPlayers(state.players.length)} 轮
+                </b>
               </div>
             </div>
           </div>
@@ -1605,7 +1771,7 @@ export default function App() {
               <button onClick={() => setSaveEnabled(true)}>保存当前新局</button>
             </div>
           )}
-          <div className="players-row">
+          <div className={`players-row players-count-${state.players.length}`}>
             {state.players.map((p) => (
               <button
                 className={`player-card ${state.turn === p.id && !finished ? 'current' : ''} ${gardenPlayer === p.id ? 'viewing' : ''}`}
@@ -1616,10 +1782,11 @@ export default function App() {
                 }}
                 style={{ '--player': PLAYER_COLORS[p.id] } as CSSProperties}
                 aria-label={`查看${p.name}的花园`}
+                aria-pressed={gardenPlayer === p.id}
               >
                 <div className="player-card-top">
                   <div className="player-avatar">
-                    <UserRound size={23} />
+                    <span className="player-monogram">{PLAYER_MARKS[p.id]}</span>
                   </div>
                   <div>
                     <strong>
@@ -1644,6 +1811,11 @@ export default function App() {
                             : 'AI'}
                   </span>
                 </div>
+                {gardenPlayer === p.id && (
+                  <span className="viewing-label">
+                    <Check size={12} /> 正在查看
+                  </span>
+                )}
                 <div className="player-card-stats">
                   <span>
                     <Coins size={15} />
@@ -1664,12 +1836,124 @@ export default function App() {
               </button>
             ))}
           </div>
+          <div className="seating-order" aria-label="行动座次">
+            行动座次：
+            {(state.turnOrder ?? state.players.map((p) => p.id)).map((id, index) => (
+              <span key={id}>
+                {index > 0 && ' → '}
+                {state.players[id].name}
+                {index === 0 && '（开局先手）'}
+              </span>
+            ))}
+          </div>
+          {view === 'table' && !finished && (
+            <div className="turn-navigation" aria-label="当前回合导航">
+              <div
+                className={`navigation-round${state.round === roundsForPlayers(state.players.length) ? ' is-final' : ''}`}
+                aria-live="polite"
+                aria-label={`第 ${state.round} 轮，共 ${roundsForPlayers(state.players.length)} 轮${state.round === roundsForPlayers(state.players.length) ? '，最后一轮' : ''}`}
+              >
+                <span className="navigation-round-label">
+                  {state.round === roundsForPlayers(state.players.length) ? '最后一轮' : '当前轮次'}
+                </span>
+                <span className="navigation-round-value" aria-hidden="true">
+                  <b>{state.round}</b>
+                  <span> / {roundsForPlayers(state.players.length)} 轮</span>
+                </span>
+                <span className="navigation-round-steps" aria-hidden="true">
+                  {Array.from({ length: roundsForPlayers(state.players.length) }, (_, index) => (
+                    <i key={index} className={index < state.round ? 'reached' : ''} />
+                  ))}
+                </span>
+              </div>
+              <div className="navigation-status" aria-live="polite">
+                <strong>
+                  {paused
+                    ? '对局已暂停'
+                    : state.turn !== 0
+                      ? `${state.players[state.turn].name}正在行动`
+                      : ready
+                        ? '检查结果，确认本回合'
+                        : state.phase.kind === 'move'
+                          ? '轮到你了 · 选择道路位置'
+                          : state.phase.kind === 'buy'
+                            ? purchaseDone
+                              ? '购买完成 · 查看本回合结果'
+                              : '选择板块 → 点击花园空地'
+                            : '完成当前奖励选择'}
+                </strong>
+                <small className="navigation-activity" title={opponentEvents[0]?.text}>
+                  {session.draft.length
+                    ? `${session.draft.length} 步待确认，可撤回`
+                    : opponentEvents[0]
+                      ? `${state.players[opponentEvents[0].player].name}：${opponentEvents[0].text}`
+                      : `第 ${state.round} / ${roundsForPlayers(state.players.length)} 轮`}
+                </small>
+              </div>
+              <button
+                className="primary"
+                onClick={() => {
+                  if (purchaseDone && !paused && !ready) {
+                    dispatch({ type: 'endBuy' });
+                    return;
+                  }
+                  const target =
+                    state.turn !== 0
+                      ? 'opponent-activity'
+                      : paused || ready
+                        ? 'current-action'
+                        : state.phase.kind === 'move'
+                          ? 'market-area'
+                          : state.phase.kind === 'buy'
+                            ? 'purchase-area'
+                            : state.phase.kind === 'shed'
+                              ? 'garden-area'
+                              : 'current-action';
+                  if (target === 'purchase-area' || target === 'garden-area') setGardenPlayer(0);
+                  scrollToArea(target);
+                }}
+              >
+                {state.turn === 0 && !paused && !ready && state.phase.kind === 'move'
+                  ? '选择道路'
+                  : state.turn === 0 && !paused && !ready && state.phase.kind === 'buy'
+                    ? purchaseDone
+                      ? '查看结果'
+                      : '前往种植'
+                    : ready
+                      ? '查看并确认'
+                      : state.turn !== 0
+                        ? '查看对手行动'
+                        : '查看操作'}
+                <ArrowRight size={15} />
+              </button>
+            </div>
+          )}
+          {view === 'table' && (
+            <OpponentActivity
+              state={state}
+              events={opponentEvents}
+              paused={paused}
+              speed={speed}
+              onPause={() => setPaused((value) => !value)}
+              onSpeed={setSpeed}
+              onInspect={(id) => {
+                setGardenPlayer(id);
+                scrollToArea('garden-area');
+              }}
+            />
+          )}
           {view === 'table' && (
             <div className="game-layout">
               <div className="game-main">
                 {finished && <Results state={state} />}
-                <Market state={state} dispatch={dispatch} paused={paused || ready} />
-                <div className="garden-section" ref={gardenRef}>
+                <Market
+                  state={state}
+                  dispatch={dispatch}
+                  paused={paused || ready}
+                  viewedPlayer={gardenPlayer}
+                  onInspect={setGardenPlayer}
+                />
+                <div className="garden-section" id="garden-area" tabIndex={-1}>
                   <div className="section-heading">
                     <div>
                       <span className="eyebrow">YOUR LITTLE CLOISTER</span>
@@ -1687,6 +1971,8 @@ export default function App() {
                         <button
                           key={p.id}
                           className={gardenPlayer === p.id ? 'active' : ''}
+                          aria-pressed={gardenPlayer === p.id}
+                          style={{ '--player': PLAYER_COLORS[p.id] } as CSSProperties}
                           onClick={() => setGardenPlayer(p.id)}
                           title={`查看${p.name}的花园`}
                         >
@@ -1699,6 +1985,51 @@ export default function App() {
                   <div className="player-mat-scroll">
                     <div className="garden-and-production player-mat">
                       <ProductionBoard
+                        controls={
+                          state.turn === 0 &&
+                          state.phase.kind === 'buy' &&
+                          !paused &&
+                          !ready && (
+                            <div className="garden-purchase" id="purchase-area" tabIndex={-1}>
+                              <div className="purchase-heading">
+                                <strong>选一块板块，再点花园空地</strong>
+                                <span>
+                                  <Coins size={15} /> {state.players[0].coins} 金币
+                                </span>
+                              </div>
+                              {gardenPlayer !== 0 && (
+                                <button className="secondary" onClick={() => setGardenPlayer(0)}>
+                                  回到我的花园放置
+                                </button>
+                              )}
+                              <PurchasePicker
+                                state={state}
+                                selectedTile={selectedTile}
+                                onSelect={(id) => {
+                                  setSelectedTile(id);
+                                  setGardenPlayer(0);
+                                }}
+                              />
+                              {!selectedTile && (
+                                <p className="purchase-empty" role="status">
+                                  {state.market[state.phase.space].tiles.length
+                                    ? '当前没有可放置的板块。可在操作栏出售特权补充金币，或在已购买后结束购买。'
+                                    : '此处板块已售完，可以查看本回合结果。'}
+                                </p>
+                              )}
+                              <div className="purchase-heading">
+                                <small>空地数字为费用 · 放置后可撤回</small>
+                                <button
+                                  className="secondary"
+                                  disabled={!state.phase.bought}
+                                  onClick={() => dispatch({ type: 'endBuy' })}
+                                >
+                                  购买完成，查看结果 <ArrowRight size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        }
                         player={player}
                         before={
                           session.draft.length ? session.committed.players[gardenPlayer] : undefined
@@ -1747,8 +2078,10 @@ export default function App() {
               <ActionPanel
                 state={state}
                 dispatch={dispatch}
-                selectedTile={selectedTile}
-                setSelectedTile={setSelectedTile}
+                onGarden={() => {
+                  setGardenPlayer(0);
+                  scrollToArea('purchase-area');
+                }}
                 selectedCells={selectedCells}
                 paused={paused}
                 onResume={() => setPaused(false)}
@@ -1866,7 +2199,9 @@ export default function App() {
             <span>
               <Leaf size={13} /> HEAVEN & ALE <i /> 慢慢耕耘，好好酿酒。
             </span>
-            <span>基础版 · 六轮四人局</span>
+            <span>
+              基础版 · {state.players.length} 人 {roundsForPlayers(state.players.length)} 轮
+            </span>
           </footer>
         </main>
       </div>
@@ -1891,7 +2226,7 @@ export default function App() {
             <div className="setting-row">
               <div>
                 <strong>AI 难度</strong>
-                <p>对三位对手生效，从下一次决策开始。刷新后恢复困难。</p>
+                <p>对所有 AI 对手生效，从下一次决策开始。刷新后恢复困难。</p>
               </div>
               <select
                 aria-label="AI 难度"
@@ -1913,6 +2248,7 @@ export default function App() {
                 value={speed}
                 onChange={(e) => setSpeed(Number(e.target.value))}
               >
+                <option value={2400}>慢速 · 2.4 秒</option>
                 <option value={1200}>从容 · 1.2 秒</option>
                 <option value={650}>标准 · 0.65 秒</option>
                 <option value={100}>快速 · 0.1 秒</option>
@@ -1961,7 +2297,42 @@ export default function App() {
               <Sprout size={44} />
             </div>
             <h3>新的土地，新的佳酿。</h3>
-            <p>你将与本笃、克拉拉和安瑟伦开启一场新的六轮竞赛。当前自动存档会被替换。</p>
+            <fieldset className="player-count-options">
+              <legend>对局人数（包含你）</legend>
+              {([2, 3, 4] as const).map((count) => (
+                <label key={count} className={newPlayerCount === count ? 'selected' : ''}>
+                  <input
+                    type="radio"
+                    name="player-count"
+                    value={count}
+                    checked={newPlayerCount === count}
+                    onChange={() => setNewPlayerCount(count)}
+                  />
+                  <strong>{count} 人</strong>
+                  <span>你 + {count - 1} 位 AI</span>
+                  <small>{roundsForPlayers(count)} 轮</small>
+                </label>
+              ))}
+            </fieldset>
+            <div className="new-game-difficulty">
+              <label htmlFor="new-game-difficulty">对手难度</label>
+              <select
+                id="new-game-difficulty"
+                value={newDifficulty}
+                onChange={(e) => setNewDifficulty(e.target.value as Difficulty)}
+                aria-describedby="new-game-difficulty-help"
+              >
+                <option value="baseline">基线 · 原版 AI</option>
+                <option value="normal">普通 · 改进评估</option>
+                <option value="hard">困难 · 搜索与终局模拟</option>
+              </select>
+              <small id="new-game-difficulty-help">
+                对本局所有 AI 生效，包括随机先手的对手。开局后仍可在对局设置中调整。
+              </small>
+            </div>
+            <p>
+              开局随机排列座次和先手，后续按座次轮流行动；每轮返回起点可争取下一轮先手。当前自动存档会被替换。
+            </p>
             <button className="secondary full" onClick={exportSave}>
               <Download size={16} />
               先导出当前对局

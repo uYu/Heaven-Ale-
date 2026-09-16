@@ -1,12 +1,13 @@
 import { stageAction } from './session.ts';
 import type { TurnSession } from './session.ts';
 import { applyAction, assertInvariants, createGame } from './engine.ts';
-import type { Action, GameState } from './types.ts';
+import type { Action, GameSetup, GameState } from './types.ts';
 export const SAVE_KEY = 'heaven-and-ale.save.v1';
 export function serialize(s: GameState) {
   return JSON.stringify({
     version: 1,
     seed: s.seed,
+    ...(s.setup ? { setup: s.setup } : {}),
     actions: s.actions,
     savedAt: new Date().toISOString(),
   });
@@ -14,7 +15,7 @@ export function serialize(s: GameState) {
 export function deserialize(text: string): GameState {
   const data: unknown = JSON.parse(text);
   if (!data || typeof data !== 'object') throw new Error('存档格式无效。');
-  const d = data as { version?: unknown; seed?: unknown; actions?: unknown };
+  const d = data as { version?: unknown; seed?: unknown; actions?: unknown; setup?: unknown };
   if (
     d.version !== 1 ||
     !Number.isInteger(d.seed) ||
@@ -25,7 +26,19 @@ export function deserialize(text: string): GameState {
     d.actions.length > 10000
   )
     throw new Error('存档版本或内容无效。');
-  let state = createGame(d.seed);
+  let setup: GameSetup | undefined;
+  if (d.setup !== undefined) {
+    const value = d.setup as Partial<GameSetup> | null;
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      ![2, 3, 4].includes(value.playerCount as number) ||
+      typeof value.randomStart !== 'boolean'
+    )
+      throw new Error('存档开局设置无效。');
+    setup = { playerCount: value.playerCount!, randomStart: value.randomStart };
+  }
+  let state = createGame(d.seed, setup);
   for (const action of d.actions) {
     if (!action || typeof action !== 'object' || typeof action.type !== 'string')
       throw new Error('存档包含无效行动。');
@@ -40,12 +53,12 @@ export function loadGame(): { state: GameState; restored: boolean; error?: strin
     if (saved) return { state: deserialize(saved), restored: true };
   } catch {
     return {
-      state: createGame(),
+      state: createGame(undefined, { playerCount: 4, randomStart: true }),
       restored: false,
       error: '无法读取旧存档，已开启新局。旧存档尚未覆盖，你可以导出备份。',
     };
   }
-  return { state: createGame(), restored: false };
+  return { state: createGame(undefined, { playerCount: 4, randomStart: true }), restored: false };
 }
 
 export function serializeSession(session: TurnSession) {
@@ -70,10 +83,16 @@ export function loadSession(): { session: TurnSession; restored: boolean; error?
     if (saved) return { session: deserializeSession(saved), restored: true };
   } catch {
     return {
-      session: { committed: createGame(), draft: [] },
+      session: {
+        committed: createGame(undefined, { playerCount: 4, randomStart: true }),
+        draft: [],
+      },
       restored: false,
       error: '无法读取旧存档，已开启新局。旧存档尚未覆盖，你可以导出备份。',
     };
   }
-  return { session: { committed: createGame(), draft: [] }, restored: false };
+  return {
+    session: { committed: createGame(undefined, { playerCount: 4, randomStart: true }), draft: [] },
+    restored: false,
+  };
 }

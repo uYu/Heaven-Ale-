@@ -126,3 +126,7 @@ export function slotName(slot: Slot, value?: number) {
       ? RESOURCE_NAMES[Number(slot[1])]
       : MONK_NAMES[Number(slot[1])];
 }
+
+export function roundsForPlayers(count: number) {
+  return count === 2 ? 3 : count === 3 ? 4 : 6;
+}

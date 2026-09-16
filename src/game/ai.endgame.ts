@@ -1,3 +1,4 @@
+import { roundsForPlayers } from './data.ts';
 import { applySimulationAction, calculateResult, legalActions } from './engine.ts';
 import type { Action, GameState } from './types.ts';
 
@@ -13,7 +14,7 @@ export interface EndgameResult {
 export function solveEndgame(input: GameState, limit: number): EndgameResult | undefined {
   const seat = input.turn;
   if (
-    input.round !== 6 ||
+    input.round !== roundsForPlayers(input.players.length) ||
     input.phase.kind === 'finished' ||
     (input.phase.kind !== 'home' && input.players.some((p, i) => i !== seat && p.home === null))
   )

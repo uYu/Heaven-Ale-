@@ -1,6 +1,6 @@
 import { chooseAction as normal, rankActions } from './ai.normal.ts';
 import { chooseAction as baseline } from './ai.baseline.ts';
-import { evaluate } from './ai.hard-v1.ts';
+import { evaluate } from './ai.search.ts';
 import { candidateActions, publicStateKey, sampledDecks } from './ai.search.ts';
 import {
   advanceSimulation,

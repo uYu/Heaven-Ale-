@@ -39,7 +39,7 @@ export interface MarketSpace {
   cost?: number;
   scoring?: 'A' | 'B' | 'C' | 'ABC';
   tiles: Tile[];
-  disc: boolean;
+  disc: boolean | number;
 }
 export interface LogEntry {
   id: number;
@@ -47,7 +47,13 @@ export interface LogEntry {
   player: number | null;
   text: string;
 }
+export interface GameSetup {
+  playerCount: 2 | 3 | 4;
+  randomStart: boolean;
+}
 export interface GameState {
+  setup?: GameSetup;
+  turnOrder?: number[];
   version: 1;
   seed: number;
   round: number;
