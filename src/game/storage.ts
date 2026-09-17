@@ -70,14 +70,24 @@ export function loadGame(): { state: GameState; restored: boolean; error?: strin
 }
 
 export function serializeSession(session: TurnSession) {
-  return JSON.stringify({ ...JSON.parse(serialize(session.committed)), draft: session.draft });
+  return JSON.stringify({
+    ...JSON.parse(serialize(session.committed)),
+    draft: session.draft,
+    ...(session.replayId ? { replayId: session.replayId } : {}),
+  });
 }
 export function deserializeSession(text: string): TurnSession {
   const committed = deserialize(text),
     data = JSON.parse(text);
   if (data.draft !== undefined && (!Array.isArray(data.draft) || data.draft.length > 200))
     throw new Error('待确认操作格式无效。');
-  let session: TurnSession = { committed, draft: [] };
+  let session: TurnSession = {
+    committed,
+    draft: [],
+    ...(typeof data.replayId === 'string' && /^[0-9a-f-]{36}$/i.test(data.replayId)
+      ? { replayId: data.replayId }
+      : {}),
+  };
   for (const action of data.draft ?? []) {
     if (!action || typeof action !== 'object' || typeof action.type !== 'string')
       throw new Error('待确认操作无效。');

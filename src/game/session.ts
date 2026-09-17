@@ -5,6 +5,7 @@ import type { Action, GameState } from './types.ts';
 export interface TurnSession {
   committed: GameState;
   draft: Action[];
+  replayId?: string;
 }
 export function completesTurn(before: GameState, after: GameState, action: Action): boolean {
   return (
@@ -61,7 +62,7 @@ export function stageAction(session: TurnSession, action: Action): TurnSession {
   if (current.turn !== 0 || current.phase.kind === 'finished')
     throw new Error('当前不是你的回合。');
   applyAction(current, action); // Validate without changing the committed state.
-  return { committed: session.committed, draft: [...session.draft, action] };
+  return { ...session, committed: session.committed, draft: [...session.draft, action] };
 }
 export function undoAction(session: TurnSession): TurnSession {
   return { ...session, draft: session.draft.slice(0, -1) };
@@ -72,10 +73,10 @@ export function resetTurn(session: TurnSession): TurnSession {
 export function confirmTurn(session: TurnSession): TurnSession {
   const { current, ready } = inspectSession(session);
   if (!ready) throw new Error('请先完成当前行动及其奖励选择。');
-  return { committed: current, draft: [] };
+  return { ...session, committed: current, draft: [] };
 }
 export function advanceComputer(session: TurnSession, action: Action): TurnSession {
   if (session.draft.length || session.committed.turn === 0)
     throw new Error('玩家尚未确认，AI 不能行动。');
-  return { committed: applyAction(session.committed, action), draft: [] };
+  return { ...session, committed: applyAction(session.committed, action), draft: [] };
 }

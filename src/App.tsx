@@ -81,6 +81,9 @@ import type { Action, GameState, Player, Tile } from './game/types.ts';
 import type { Difficulty } from './game/ai.ts';
 
 import type { TurnSession } from './game/session.ts';
+import { ReplayLibrary } from './components/ReplayLibrary.tsx';
+import { CloudStatus } from './components/CloudStatus.tsx';
+import { attachRecording, enqueueRecording, startReplaySync } from './replay/sync.ts';
 import { StartingPositions } from './components/StartingPositions.tsx';
 import { MainMenu } from './components/MainMenu.tsx';
 import { loadPreferences, savePreferences } from './game/preferences.ts';
@@ -1427,7 +1430,71 @@ function savedOpponentActivity(state: GameState): Activity[] {
     }));
 }
 
+function replayRoute() {
+  if (location.hash === '#replays') return '';
+  const match = /^#replay\/([0-9a-f-]{36})$/i.exec(location.hash);
+  return match ? match[1] : null;
+}
+function ReplayBoard({ state }: { state: GameState }) {
+  const [viewed, setViewed] = useState(0);
+  const player = state.players[viewed] ?? state.players[0];
+  return (
+    <>
+      {state.phase.kind === 'finished' && <Results state={state} />}
+      <Market state={state} dispatch={() => {}} paused viewedPlayer={viewed} onHome={() => {}} />
+      <div className="replay-player-tabs" aria-label="回放玩家视角">
+        {state.players.map((p) => (
+          <button
+            className="secondary"
+            key={p.id}
+            aria-pressed={viewed === p.id}
+            onClick={() => setViewed(p.id)}
+          >
+            {p.name} · {p.coins} 金币
+          </button>
+        ))}
+      </div>
+      <BoardViewport label="回放花园与生产计分板">
+        <div className="player-mat garden-and-production">
+          <ProductionBoard player={player}>
+            <Garden
+              player={player}
+              state={state}
+              selectedTile={null}
+              dispatch={() => {}}
+              selectedCells={[]}
+              setSelectedCells={() => {}}
+              paused
+            />
+          </ProductionBoard>
+          <ScoringBoard player={player} state={state} dispatch={() => {}} disabled />
+        </div>
+      </BoardViewport>
+      <div className="privilege-hand">
+        <span>未使用的特权</span>
+        {player.cards.map((card) => (
+          <span className="hand-card" key={card} title={CARD_INFO[card].text}>
+            {CARD_INFO[card].name}
+          </span>
+        ))}
+        {!player.cards.length && <small>所有特权均已使用或出售</small>}
+      </div>
+      <BarrelCollection title="已领取酒桶" barrels={player.barrels} />
+    </>
+  );
+}
 export default function App() {
+  const [replay, setReplay] = useState<string | null>(replayRoute);
+  const latestSession = useRef<TurnSession | undefined>(undefined);
+  useEffect(() => {
+    startReplaySync();
+    const update = () => {
+      setReplay(replayRoute());
+      setActive(false);
+    };
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
   const [active, setActive] = useState(false);
   const [menuNotice, setMenuNotice] = useState('');
   const [boot, setBoot] = useState<{
@@ -1436,9 +1503,25 @@ export default function App() {
     error?: string;
     difficulty?: Difficulty;
   } | null>(null);
+  if (replay !== null)
+    return (
+      <ReplayLibrary
+        key={replay}
+        initialId={replay || undefined}
+        onExit={() => {
+          history.replaceState(null, '', location.pathname + location.search);
+          setReplay(null);
+          setActive(false);
+        }}
+        renderBoard={(state) => <ReplayBoard state={state} />}
+      />
+    );
   return active && boot ? (
     <GameApp
       boot={boot}
+      onSessionChange={(session) => {
+        latestSession.current = session;
+      }}
       onLeave={(session, notice = '') => {
         setMenuNotice(notice);
         setBoot({ session, restored: true });
@@ -1448,10 +1531,14 @@ export default function App() {
   ) : (
     <MainMenu
       rules={<Rules />}
-      current={boot?.session}
+      current={latestSession.current ?? boot?.session}
+      onReplays={() => {
+        location.hash = 'replays';
+      }}
       notice={menuNotice}
       onLaunch={(session, restored, difficulty) => {
         setMenuNotice('');
+        latestSession.current = session;
         setBoot({ session, restored, difficulty });
         setActive(true);
       }}
@@ -1462,17 +1549,25 @@ export default function App() {
 function GameApp({
   boot,
   onLeave,
+  onSessionChange,
 }: {
+  onSessionChange: (session: TurnSession) => void;
   boot: { session: TurnSession; restored: boolean; error?: string; difficulty?: Difficulty };
   onLeave: (session: TurnSession, notice?: string) => void;
 }) {
-  const [session, setSession] = useState(boot.session),
+  const [session, setSession] = useState(() => attachRecording(boot.session)),
     [view, setView] = useState<'table' | 'goals' | 'journal' | 'rules'>('table'),
     [gardenPlayer, setGardenPlayer] = useState(0);
   const { visible: state, ready } = useMemo(() => inspectSession(session), [session]);
   const [opponentEvents, setOpponentEvents] = useState<Activity[]>(() =>
     savedOpponentActivity(boot.session.committed),
   );
+  useEffect(() => {
+    onSessionChange(session);
+  }, [session]);
+  useEffect(() => {
+    if (session.replayId) enqueueRecording(session.committed, session.replayId);
+  }, [session.committed, session.replayId]);
   const previousCommitted = useRef(session.committed);
   useEffect(() => {
     const before = previousCommitted.current;
@@ -1684,7 +1779,7 @@ function GameApp({
       const restored = deserializeSession(await file.text());
       previousCommitted.current = restored.committed;
       setOpponentEvents(savedOpponentActivity(restored.committed));
-      setSession(restored);
+      setSession(attachRecording({ ...restored, replayId: undefined }));
       setSaveEnabled(true);
       setPaused(false);
       setModal(null);
@@ -1705,7 +1800,7 @@ function GameApp({
       randomStart: true,
       chooseStartingPositions: true,
     });
-    setSession({ committed: game, draft: [] });
+    setSession(attachRecording({ committed: game, draft: [] }));
     setSaveEnabled(true);
     setPaused(false);
     setModal(null);
@@ -1828,6 +1923,7 @@ function GameApp({
               </div>
             </div>
           </div>
+          <CloudStatus id={session.replayId} />
           {boot.error && !saveEnabled && (
             <div className="warning-banner">
               旧存档无法读取，当前局尚未自动保存。

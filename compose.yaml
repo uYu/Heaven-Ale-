@@ -1,0 +1,41 @@
+services:
+  app:
+    build: .
+    pull_policy: build
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3001
+      REPLAY_DB: /app/data/replays.sqlite
+      REPLAY_CAPACITY: ${REPLAY_CAPACITY:-100000}
+      TRUST_PROXY: '1'
+    volumes:
+      - replay_data:/app/data
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 512m
+  web:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - '8200:80'
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+volumes:
+  replay_data:
+  caddy_data:
+  caddy_config:

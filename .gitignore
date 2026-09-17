@@ -12,3 +12,9 @@ tmp/
 coverage/
 .idea/
 .vscode/
+
+# Server replay database and WAL files
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

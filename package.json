@@ -11,7 +11,8 @@
     "simulate": "node --experimental-strip-types scripts/simulate.ts",
     "benchmark:ai": "node --experimental-strip-types scripts/benchmark-ai.ts",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "server": "node --experimental-strip-types server/index.ts"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -28,6 +29,6 @@
     "vite": "^6.3.5"
   },
   "engines": {
-    "node": ">=22.6.0"
+    "node": ">=22.13.0"
   }
 }

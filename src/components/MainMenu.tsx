@@ -74,7 +74,9 @@ export function MainMenu({
   current,
   notice,
   onLaunch,
+  onReplays,
 }: {
+  onReplays: () => void;
   rules: ReactNode;
   current?: TurnSession;
   notice?: string;
@@ -117,7 +119,7 @@ export function MainMenu({
         !window.confirm('导入将替换当前本地存档。确定导入并进入游戏？')
       )
         return;
-      onLaunch(session, true);
+      onLaunch({ ...session, replayId: undefined }, true);
     } catch (error) {
       setMessage(`导入失败：${error instanceof Error ? error.message : '存档无效'}。`);
     } finally {
@@ -169,6 +171,11 @@ export function MainMenu({
                 >
                   <Play size={20} /> 开始游戏 <ArrowRight size={18} />
                 </button>
+                <button onClick={onReplays}>
+                  <Play size={20} />
+                  公开对局回放
+                  <ArrowRight size={16} />
+                </button>
                 <button onClick={() => setPage('rules')}>
                   <BookOpen size={20} /> 规则介绍 <ArrowRight size={16} />
                 </button>
@@ -181,7 +188,7 @@ export function MainMenu({
                 <span>联机对局</span>
                 <small>敬请期待</small>
               </div>
-              <p className="menu-footnote">无需账号 · 进度自动保存在当前浏览器</p>
+              <p className="menu-footnote">无需账号 · 对局自动上传，结束后公开回放</p>
             </>
           )}
           {page === 'start' && saved.session && (
@@ -241,7 +248,7 @@ export function MainMenu({
                 <DifficultySelect value={difficulty} onChange={setDifficulty} />
               </label>
               <p className="menu-footnote">
-                随机座次与先手，随后逆时针选择起始位置。开始后可在对局菜单中调整难度。
+                随机座次与先手，随后逆时针选择起始位置。已确认行动自动保存到服务端，对局结束后所有人都可观看回放。
               </p>
               {(saved.session || saved.error) && (
                 <div className="menu-save-card">

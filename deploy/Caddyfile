@@ -1,0 +1,6 @@
+:80 {
+  encode zstd gzip
+  reverse_proxy app:3001 {
+    header_up X-Real-IP {remote_host}
+  }
+}
