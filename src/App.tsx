@@ -75,6 +75,7 @@ import {
   undoAction,
 } from './game/session.ts';
 import { BrewerIcon, MonkIcon, MONK_COLORS } from './components/MonkIcon.tsx';
+import { useRoadMotion, usePlacementMotion } from './hooks/useBoardMotion.ts';
 import { BoardViewport } from './components/BoardViewport.tsx';
 import { ProductionBoard, ScoringBoard } from './components/PlayerBoards.tsx';
 import type { Action, GameState, Player, Tile } from './game/types.ts';
@@ -104,18 +105,22 @@ function Pawn({
   map = false,
   selected = false,
   name,
+  position,
 }: {
   player: number;
   small?: boolean;
   map?: boolean;
   selected?: boolean;
   name?: string;
+  position?: number;
 }) {
   return (
     <span
       className={`pawn ${small ? 'small' : ''} ${map ? 'map-pawn' : ''} ${selected ? 'is-viewed' : ''}`}
       title={name ? `${name}${selected ? ' · 正在查看' : ''}` : undefined}
       aria-label={name}
+      data-road-pawn={map ? player : undefined}
+      data-road-position={position === undefined ? undefined : position + 1}
       style={{ '--player': PLAYER_COLORS[player] } as CSSProperties}
     >
       {map ? <b>{PLAYER_MARKS[player]}</b> : <UserRound size={small ? 10 : 15} />}
@@ -233,6 +238,8 @@ function Market({
   viewedPlayer: number;
   onHome: () => void;
 }) {
+  const roadRef = useRef<HTMLDivElement>(null);
+  useRoadMotion(roadRef, String(state.seed), state.players.map((p) => p.position).join(','));
   const human = state.turn === 0 && !paused,
     p = state.players[state.turn];
   return (
@@ -250,7 +257,7 @@ function Market({
       </div>
       <HomeRewards state={state} />
       <BoardViewport label="修道院道路">
-        <div className="market-board">
+        <div className="market-board" ref={roadRef}>
           <div className="board-center">
             <div className="table-center-title">
               <Wine size={20} />
@@ -295,6 +302,7 @@ function Market({
           </div>
           <button
             className={`track-space home-space ${human && canVisit(state, TRACK_END) ? 'available' : ''}`}
+            data-road-step={0}
             data-direction={roadDirection(0)}
             style={roadPosition(0)}
             onClick={onHome}
@@ -314,6 +322,7 @@ function Market({
                     map
                     selected={viewedPlayer === p.id}
                     name={p.name}
+                    position={p.position}
                   />
                 ))}
             </div>
@@ -334,6 +343,7 @@ function Market({
               <button
                 key={index}
                 className={`track-space ${space.type} ${available ? 'available' : ''} ${selected ? 'selected' : ''} ${(!space.tiles.length && ['resource', 'monk'].includes(space.type)) || (space.type === 'score' && !space.disc) ? 'depleted' : ''}`}
+                data-road-step={index + 1}
                 data-direction={roadDirection(index + 1)}
                 style={roadPosition(index + 1)}
                 disabled={!available}
@@ -382,6 +392,7 @@ function Market({
                       map
                       selected={viewedPlayer === p.id}
                       name={p.name}
+                      position={p.position}
                     />
                   ))}
                 </div>
@@ -498,6 +509,16 @@ function PurchasePicker({
     </div>
   );
 }
+function AnimatedGardenCell({
+  identity,
+  value,
+  ...props
+}: SVGProps<SVGGElement> & { identity: string; value: string }) {
+  const ref = useRef<SVGGElement>(null);
+  usePlacementMotion(ref, identity, value);
+  return <g ref={ref} {...props} />;
+}
+
 function Garden({
   player,
   state,
@@ -581,7 +602,9 @@ function Garden({
                   ? MONK_COLORS[t.monk]
                   : '#8d7995';
           return (
-            <g
+            <AnimatedGardenCell
+              identity={`${state.seed}:${player.id}`}
+              value={`${t?.id ?? 'empty'}:${shed ?? 'empty'}`}
               key={c.id}
               transform={`translate(${190 + c.x * 21.4},${36 + c.y * 37})`}
               role={selectable ? 'button' : undefined}
@@ -677,7 +700,7 @@ function Garden({
                 <circle r="1.7" fill={c.side === 'sun' ? '#cbbb8d' : '#a5b79b'} />
               )}
               {selected && <circle cx="14" cy="-14" r="5" fill="#efbe61" />}
-            </g>
+            </AnimatedGardenCell>
           );
         })}
       </svg>

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import { useRef, useState } from 'react';
+import type { CSSProperties, ReactNode, SVGProps } from 'react';
 import {
   Check,
   Circle,
@@ -20,6 +20,7 @@ import {
   slotName,
 } from '../game/data.ts';
 import { BrewerIcon, MonkIcon, MONK_COLORS, MONK_LABELS } from './MonkIcon.tsx';
+import { usePlacementMotion, useTrackMotion } from '../hooks/useBoardMotion.ts';
 import { scoreOptions } from '../game/engine.ts';
 import type { Action, GameState, Player, Slot } from '../game/types.ts';
 
@@ -29,6 +30,23 @@ export function trackPoint(position: number) {
   if (position <= 14) return { x: 822, y: 60 + (position - 12) * 74 };
   return { x: 822 - (position - 14) * 68, y: 208 };
 }
+function ProductionMarker({
+  identity,
+  position,
+  x,
+  y,
+  ...props
+}: SVGProps<SVGGElement> & {
+  identity: string;
+  position: number;
+  x: number;
+  y: number;
+}) {
+  const ref = useRef<SVGGElement>(null);
+  useTrackMotion(ref, identity, position, { x, y }, trackPoint);
+  return <g ref={ref} transform={`translate(${x},${y})`} {...props} />;
+}
+
 const icons = [TreePine, FlaskConical, Flower2, Droplets, Wheat];
 function ResourceMark({ index, size = 18 }: { index: number; size?: number }) {
   const Icon = index === 5 ? BrewerIcon : icons[index];
@@ -377,12 +395,15 @@ export function ProductionBoard({
                 point.y + (pos > 0 ? 6 : 0) + (count > 3 ? (Math.floor(order / 3) - 0.5) * 19 : 0);
             const MarkerIcon = i === 5 ? BrewerIcon : icons[i];
             return (
-              <g
+              <ProductionMarker
+                identity={`${player.id}:${i}`}
+                position={pos}
+                x={x}
+                y={y}
                 key={i}
                 className="production-marker"
                 data-marker={names[i]}
                 data-position={pos}
-                transform={`translate(${x},${y})`}
               >
                 <title>
                   {names[i]}：{positionText(pos)}
@@ -405,7 +426,7 @@ export function ProductionBoard({
                   color="#fffaf0"
                   strokeWidth={2}
                 />
-              </g>
+              </ProductionMarker>
             );
           })}
         </svg>
@@ -422,6 +443,24 @@ export function ProductionBoard({
     </section>
   );
 }
+function SocketArt({
+  identity,
+  used,
+  children,
+}: {
+  identity: string;
+  used: boolean;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  usePlacementMotion(ref, identity, String(used));
+  return (
+    <span className="socket-art" ref={ref}>
+      {children}
+    </span>
+  );
+}
+
 function ScoreSymbol({ slot }: { slot: Slot }) {
   if (slot === 'number') return <span className="number-symbol">1–5</span>;
   if (slot[0] === 'm')
@@ -498,14 +537,14 @@ export function ScoringBoard({
                       <span className="socket-type">
                         {slot === 'number' ? 'A' : slot[0] === 'r' ? 'C' : 'B'}
                       </span>
-                      <span className="socket-art">
+                      <SocketArt identity={`${player.id}:${slot}`} used={used}>
                         <ScoreSymbol slot={slot} />
                         {used && (
                           <span className="placed-disc">
                             <Check size={19} />
                           </span>
                         )}
-                      </span>
+                      </SocketArt>
                       <span className="socket-label">
                         {slot === 'number'
                           ? '同一肥力'
