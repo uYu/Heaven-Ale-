@@ -1,5 +1,6 @@
 import { chooseAction as normal, rankActions } from './ai.normal.ts';
 import { chooseAction as baseline } from './ai.baseline.ts';
+import { openingOpportunityPenalty } from './ai.opening.ts';
 import { evaluate } from './ai.search.ts';
 import { candidateActions, publicStateKey, sampledDecks } from './ai.search.ts';
 import {
@@ -31,6 +32,7 @@ interface Budget {
 interface Edge {
   plan: Action[];
   prior: number;
+  openingPenalty: number;
   visits: number;
   total: number;
 }
@@ -87,6 +89,7 @@ function proposals(input: GameState, budget: Budget, width: number): Edge[] {
       edge: {
         plan,
         prior: evaluate(state, s.turn),
+        openingPenalty: openingOpportunityPenalty(s, plan, ranked),
         visits: 0,
         total: 0,
       },
@@ -209,7 +212,9 @@ export function searchTree(input: GameState, options: TreeOptions = {}): TreeRes
     for (const { node: visited, edge } of path) {
       visited.visits++;
       edge.visits++;
-      edge.total += value;
+      // Regularize only the initial construction decision. A sufficiently good
+      // distant opportunity can still outweigh the cost of the skipped stops.
+      edge.total += value - edge.openingPenalty;
     }
     simulations++;
     depth = Math.max(depth, path.length);
