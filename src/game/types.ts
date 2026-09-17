@@ -27,6 +27,7 @@ export interface Player {
 }
 export type BuyPhase = { kind: 'buy'; space: number; bought: number };
 export type Phase =
+  | { kind: 'setup' }
   | { kind: 'move' }
   | BuyPhase
   | { kind: 'shed'; cell: number; tier: number; rest: number[]; resume: BuyPhase }
@@ -50,10 +51,12 @@ export interface LogEntry {
 export interface GameSetup {
   playerCount: 2 | 3 | 4;
   randomStart: boolean;
+  chooseStartingPositions?: boolean;
 }
 export interface GameState {
   setup?: GameSetup;
   turnOrder?: number[];
+  startingSlots?: (number | null)[];
   version: 1;
   seed: number;
   round: number;
@@ -69,6 +72,7 @@ export interface GameState {
   revision: number;
 }
 export type Action =
+  | { type: 'start'; slot: number; color?: number }
   | { type: 'move'; space: number }
   | { type: 'buy'; tile: string; cell: number }
   | { type: 'endBuy' }

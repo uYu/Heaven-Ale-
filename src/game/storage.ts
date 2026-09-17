@@ -33,10 +33,18 @@ export function deserialize(text: string): GameState {
       !value ||
       typeof value !== 'object' ||
       ![2, 3, 4].includes(value.playerCount as number) ||
-      typeof value.randomStart !== 'boolean'
+      typeof value.randomStart !== 'boolean' ||
+      (value.chooseStartingPositions !== undefined &&
+        typeof value.chooseStartingPositions !== 'boolean')
     )
       throw new Error('存档开局设置无效。');
-    setup = { playerCount: value.playerCount!, randomStart: value.randomStart };
+    setup = {
+      playerCount: value.playerCount!,
+      randomStart: value.randomStart,
+      ...(value.chooseStartingPositions !== undefined
+        ? { chooseStartingPositions: value.chooseStartingPositions }
+        : {}),
+    };
   }
   let state = createGame(d.seed, setup);
   for (const action of d.actions) {

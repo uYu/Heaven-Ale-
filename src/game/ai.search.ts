@@ -353,7 +353,16 @@ export function chooseAction(s: GameState): Action {
 }
 
 export function publicStateKey(s: GameState): string {
-  return key([s.round, s.turn, s.turnOrder, s.phase, s.players, s.market, s.barrelSupply]);
+  return key([
+    s.round,
+    s.turn,
+    s.turnOrder,
+    s.phase,
+    s.players,
+    s.market,
+    s.barrelSupply,
+    ...(s.startingSlots ? [s.startingSlots] : []),
+  ]);
 }
 // A private planner per opponent. Reuse only an exact public-state match within the
 // current transaction. A changed board, undo, import or new game invalidates it.

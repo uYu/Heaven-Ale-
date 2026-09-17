@@ -137,46 +137,6 @@ export function ProductionBoard({
           ：平衡后的最低资源位置 × 倍率，得到生产分（最低未到 1 时为 0 分）。
         </p>
       </details>
-      <div className="mobile-production" aria-label="资源位置表">
-        <div className="mobile-production-grid">
-          <div className="mobile-track-row mobile-track-numbers">
-            <span className="mobile-track-name">位置 →</span>
-            {Array.from({ length: 31 }, (_, i) => (
-              <span key={i}>{i - 10}</span>
-            ))}
-          </div>
-          {positions.map((pos, i) => (
-            <div
-              className="mobile-track-row"
-              key={i}
-              style={{ '--marker': colors[i] } as CSSProperties}
-            >
-              <span className="mobile-track-name">
-                <ResourceMark index={i} />
-                {names[i]}
-                <b>{pos}</b>
-              </span>
-              {Array.from({ length: 31 }, (_, n) => (
-                <span
-                  key={n}
-                  style={
-                    {
-                      '--band-fill': stageFills[stageIndex(n - 10)],
-                      borderLeft: masterStages.some((s) => s.min === n - 10)
-                        ? `2px solid ${stageEdges[stageIndex(n - 10)]}`
-                        : undefined,
-                    } as CSSProperties
-                  }
-                  className={`${n - 10 === pos ? 'has-marker' : ''} ${oldPositions[i] !== pos && n - 10 === oldPositions[i] ? 'was-marker' : ''}`}
-                  title={`${names[i]} · ${n - 10}`}
-                >
-                  {n - 10 === pos ? <ResourceMark index={i} size={16} /> : null}
-                </span>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
       {controls}
       <div className="player-mat-canvas">
         <svg

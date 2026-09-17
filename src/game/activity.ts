@@ -16,6 +16,9 @@ export function describeActivity(before: GameState, after: GameState, action: Ac
   const next = after.players[player.id];
   let text = '';
   switch (action.type) {
+    case 'start':
+      text = `选择起始位置：${action.slot === 2 ? `${RESOURCE_NAMES[action.color!]} +2` : HOME_NAMES[action.slot]}。`;
+      break;
     case 'move': {
       const destination = before.market[action.space];
       const from = player.position < 0 ? '起点' : `第 ${player.position + 1} 格`;

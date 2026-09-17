@@ -85,7 +85,7 @@ export function createGame(seed = Date.now() >>> 0, setup?: GameSetup): GameStat
   if (setup?.randomStart) shuffle(order);
   // Starting rewards are selected in reverse seating order, using the existing local convention.
   const rewards: string[] = [];
-  order
+  (setup?.chooseStartingPositions ? [] : order)
     .slice(1)
     .reverse()
     .forEach((id, index) => {
@@ -117,14 +117,29 @@ export function createGame(seed = Date.now() >>> 0, setup?: GameSetup): GameStat
     actions: [],
     revision: 0,
   };
+  if (setup?.chooseStartingPositions) {
+    s.startingSlots = players.map((p) => (p.id === order[0] ? 0 : null));
+    s.phase = { kind: 'setup' };
+    s.turn = order[order.length - 1];
+  }
   refill(s);
   log(
     s,
     setup
-      ? `${count} 人 ${roundsForPlayers(count)} 轮对局开始。行动座次：${order.map((id) => players[id].name).join(' → ')}；${players[order[0]].name}先手。${rewards.join('，')}。`
+      ? `${count} 人 ${roundsForPlayers(count)} 轮对局开始。行动座次：${order.map((id) => players[id].name).join(' → ')}；${players[order[0]].name}先手。${rewards.length ? `${rewards.join('，')}。` : ''}`
       : '六轮酿酒竞赛开始。你是起始玩家；安瑟伦获得酿酒师 +1，克拉拉获得大麦 +2，本笃获得金币 +2。',
     null,
   );
+  if (setup?.chooseStartingPositions)
+    log(
+      s,
+      `${players[order[0]].name}占据先手位（无即时奖励）。其余玩家按逆时针顺序选择起始位置：${order
+        .slice(1)
+        .reverse()
+        .map((id) => players[id].name)
+        .join(' → ')}。`,
+      null,
+    );
   return s;
 }
 function log(s: GameState, text: string, player: number | null = s.turn) {
@@ -262,6 +277,7 @@ function nextTurn(s: GameState) {
     }
     s.round++;
     s.turn = s.players.findIndex((p) => p.home === 0);
+    if (s.startingSlots) s.startingSlots = s.players.map((p) => p.home);
     for (const p of s.players) {
       p.position = -1;
       p.home = null;
@@ -330,6 +346,7 @@ export function applyAction(state: GameState, action: Action): GameState {
 export function cloneSimulationState(state: GameState): GameState {
   return {
     ...state,
+    ...(state.startingSlots ? { startingSlots: [...state.startingSlots] } : {}),
     players: state.players.map((p) => ({
       ...p,
       resources: [...p.resources],
@@ -364,7 +381,46 @@ export function advanceSimulation(state: GameState, action: Action): GameState {
 function executeAction(s: GameState, action: Action): GameState {
   const p = s.players[s.turn];
   requireRule(s.phase.kind !== 'finished', '对局已经结束。');
+  requireRule(s.phase.kind !== 'setup' || action.type === 'start', '请先选择起始位置。');
   switch (action.type) {
+    case 'start': {
+      requireRule(
+        s.phase.kind === 'setup' && s.startingSlots && s.turnOrder,
+        '当前不是开局选择阶段。',
+      );
+      requireRule(
+        s.startingSlots[s.turn] === null &&
+          [1, 2, 3].includes(action.slot) &&
+          !s.startingSlots.includes(action.slot),
+        '该起始位置不可选。',
+      );
+      if (action.slot === 2) {
+        requireRule(
+          Number.isInteger(action.color) && action.color! >= 0 && action.color! < 5,
+          '请选择一种资源。',
+        );
+        advanceResource(p, action.color!, 2);
+      } else {
+        requireRule(action.color === undefined, '该位置不需要选择资源。');
+        if (action.slot === 1) p.master++;
+        else p.coins += 2;
+      }
+      s.startingSlots[s.turn] = action.slot;
+      log(
+        s,
+        `选择起始位置「${action.slot === 2 ? `${RESOURCE_NAMES[action.color!]} +2` : HOME_NAMES[action.slot]}」。`,
+      );
+      const remaining = s.turnOrder
+        .slice(1)
+        .reverse()
+        .find((id) => s.startingSlots![id] === null);
+      if (remaining === undefined) {
+        s.turn = s.turnOrder[0];
+        s.phase = { kind: 'move' };
+        log(s, `起始位置选择完成，${s.players[s.turn].name}开始第一回合。`, null);
+      } else s.turn = remaining;
+      break;
+    }
     case 'emergency': {
       requireRule(p.cards.includes(action.card), '这张特权卡已经使用或出售。');
       p.cards.splice(p.cards.indexOf(action.card), 1);
@@ -374,6 +430,7 @@ function executeAction(s: GameState, action: Action): GameState {
     }
     case 'move': {
       requireRule(canVisit(s, action.space), '不能前往该位置：只能前进，并且必须能执行对应行动。');
+      if (s.startingSlots) s.startingSlots[p.id] = null;
       p.position = action.space;
       if (action.space === TRACK_END) {
         s.phase = { kind: 'home' };
@@ -523,7 +580,8 @@ function executeAction(s: GameState, action: Action): GameState {
         Number.isInteger(action.slot) &&
           action.slot >= 0 &&
           action.slot < 4 &&
-          !s.players.some((x) => x.home === action.slot),
+          !s.players.some((x) => x.home === action.slot) &&
+          !s.startingSlots?.includes(action.slot),
         '该起点位置不可选。',
       );
       requireRule(
@@ -562,6 +620,15 @@ export function legalActions(s: GameState): Action[] {
     phase = s.phase,
     actions: Action[] = [];
   if (phase.kind === 'finished') return actions;
+  if (phase.kind === 'setup') {
+    for (const slot of [1, 2, 3]) {
+      if (s.startingSlots?.includes(slot)) continue;
+      if (slot === 2)
+        for (let color = 0; color < 5; color++) actions.push({ type: 'start', slot, color });
+      else actions.push({ type: 'start', slot });
+    }
+    return actions;
+  }
   for (const card of p.cards) actions.push({ type: 'emergency', card });
   if (phase.kind === 'move')
     for (let space = p.position + 1; space <= TRACK_END; space++)
@@ -589,7 +656,7 @@ export function legalActions(s: GameState): Action[] {
   }
   if (phase.kind === 'home')
     for (let slot = 0; slot < 4; slot++) {
-      if (s.players.some((x) => x.home === slot)) continue;
+      if (s.players.some((x) => x.home === slot) || s.startingSlots?.includes(slot)) continue;
       if (
         slot !== 0 &&
         s.players.filter((x) => x.home !== null).length === s.players.length - 1 &&
@@ -665,6 +732,24 @@ export function assertInvariants(s: GameState) {
         s.turnOrder.every((id) => Number.isInteger(id) && id >= 0 && id < s.players.length),
       '行动座次异常。',
     );
+  if (s.startingSlots) {
+    const occupied = s.startingSlots.filter((slot) => slot !== null);
+    requireRule(
+      s.startingSlots.length === s.players.length &&
+        occupied.every((slot) => Number.isInteger(slot) && slot >= 0 && slot <= 3) &&
+        new Set(occupied).size === occupied.length,
+      '起始位置异常。',
+    );
+    requireRule(
+      !s.players.some((p) => p.home !== null && occupied.includes(p.home)),
+      '起始位置重复占用。',
+    );
+    if (s.phase.kind === 'setup')
+      requireRule(
+        s.startingSlots[s.turn] === null && s.startingSlots[s.turnOrder![0]] === 0,
+        '开局选择顺序异常。',
+      );
+  }
   const totalTiles = 100 + roundsForPlayers(s.players.length) * 4;
   const ids: string[] = [...s.resourceDeck, ...s.monkDeck, ...s.market.flatMap((m) => m.tiles)].map(
     (t) => t.id,

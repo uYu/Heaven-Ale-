@@ -8,6 +8,7 @@ export interface TurnSession {
 }
 export function completesTurn(before: GameState, after: GameState, action: Action): boolean {
   return (
+    action.type === 'start' ||
     action.type === 'endBuy' ||
     action.type === 'home' ||
     action.type === 'privilege' ||
@@ -33,13 +34,14 @@ export function inspectSession(session: TurnSession) {
       ...current,
       turn: 0,
       round: beforeLast.round,
-      phase: { kind: 'move' },
+      phase: { kind: beforeLast.phase.kind === 'setup' ? 'setup' : 'move' },
       log: current.log.filter((l) => l.round === beforeLast.round || l.round < beforeLast.round),
     };
     if (current.round !== beforeLast.round) {
       const last = session.draft[session.draft.length - 1];
       visible = {
         ...visible,
+        ...(beforeLast.startingSlots ? { startingSlots: beforeLast.startingSlots } : {}),
         market: beforeLast.market,
         resourceDeck: beforeLast.resourceDeck,
         monkDeck: beforeLast.monkDeck,
